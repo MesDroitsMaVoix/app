@@ -51,6 +51,26 @@ export interface AgendaEvent {
 /* The currently signed-in travailleur (for "mon agenda") */
 export const CURRENT_USER_ID = 'p1'
 
+/* ---------- Meeting reports (comptes rendus) ---------- */
+
+export interface ReportAction {
+  text: string
+  done: boolean
+}
+
+export interface Report {
+  id: string
+  title: string
+  date: string
+  type: EventType
+  summary: string
+  decisions: string[]
+  actions: ReportAction[]
+  /** Who can read this report (empty = no one but managers). */
+  personIds: string[]
+  groupIds: string[]
+}
+
 /* ---------- Messaging ---------- */
 
 export interface Message {
@@ -104,6 +124,7 @@ interface AppState {
   people: Person[]
   groups: Group[]
   events: AgendaEvent[]
+  reports: Report[]
 
   conversations: Conversation[]
   activeConversationId: number
@@ -130,6 +151,11 @@ interface AppState {
   deleteEvent: (id: string) => void
   toggleEventGroup: (eventId: string, groupId: string) => void
   toggleEventPerson: (eventId: string, personId: string) => void
+
+  // report management (comptes rendus)
+  addReport: (r: Omit<Report, 'id'>) => void
+  updateReport: (id: string, r: Omit<Report, 'id'>) => void
+  deleteReport: (id: string) => void
 
   // messaging
   setConversation: (id: number) => void
@@ -165,6 +191,61 @@ const EVENTS: AgendaEvent[] = [
   { id: 'e5', date: '2026-07-16', time: '09h30', title: 'Réunion institutionnelle',         place: 'Réfectoire',              type: 'Institution', personIds: [], groupIds: ['g1'] },
 ]
 
+const REPORTS: Report[] = [
+  {
+    id: 'r1',
+    title: 'Conseil de la Vie Sociale (CVS)',
+    date: '28 mai 2026',
+    type: 'CVS',
+    summary: 'Nous avons parlé des repas, des sorties et de la sécurité dans les ateliers.',
+    decisions: [
+      'Un nouveau menu sera proposé à la cantine.',
+      'Une sortie au parc est organisée en juillet.',
+      'Des panneaux plus clairs seront installés dans les couloirs.',
+    ],
+    actions: [
+      { text: 'Choisir le nouveau menu avec le cuisinier', done: true },
+      { text: 'Réserver le bus pour la sortie', done: false },
+      { text: 'Commander les panneaux', done: false },
+    ],
+    personIds: [],
+    groupIds: ['g1', 'g5'],
+  },
+  {
+    id: 'r2',
+    title: 'Réunion institutionnelle',
+    date: '14 mai 2026',
+    type: 'Institution',
+    summary: "Présentation des projets de l'année et accueil des nouveaux travailleurs.",
+    decisions: [
+      "Deux nouveaux travailleurs rejoignent l'atelier Espaces verts.",
+      'Les horaires du vendredi changent un peu.',
+    ],
+    actions: [
+      { text: 'Informer tous les ateliers des nouveaux horaires', done: true },
+    ],
+    personIds: [],
+    groupIds: ['g1'],
+  },
+  {
+    id: 'r3',
+    title: "Réunion d'atelier Conditionnement",
+    date: '30 avril 2026',
+    type: 'Atelier',
+    summary: 'Organisation du travail et besoins en matériel.',
+    decisions: [
+      'De nouveaux gants seront commandés.',
+      'Les pauses seront mieux réparties.',
+    ],
+    actions: [
+      { text: 'Commander les gants', done: true },
+      { text: 'Afficher le nouveau planning des pauses', done: true },
+    ],
+    personIds: [],
+    groupIds: ['g2'],
+  },
+]
+
 const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 1, name: 'Marie L.', role: 'Déléguée CVS', initials: 'ML',
@@ -191,6 +272,7 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
 let groupCounter = GROUPS.length
 let eventCounter = EVENTS.length
 let personCounter = PEOPLE.length
+let reportCounter = REPORTS.length
 let conversationCounter = INITIAL_CONVERSATIONS.length
 
 function makeInitials(name: string): string {
@@ -203,8 +285,9 @@ function makeInitials(name: string): string {
 /** Login accounts. Codes (4 digits) are defined by each user on first login
  * and stored in localStorage — see components/Login.tsx. */
 const ACCOUNTS: Account[] = [
-  { id: 'acc-jean',  name: 'Jean D.',  initials: 'JD', role: 'travailleur',  code: null, personId: 'p1' },
-  { id: 'acc-marie', name: 'Marie L.', initials: 'ML', role: 'representant', code: null, personId: 'p7' },
+  // Comptes de démo avec codes déjà définis (pas de première connexion).
+  { id: 'acc-jean',  name: 'Jean D.',  initials: 'JD', role: 'travailleur',  code: '1234', personId: 'p1' },
+  { id: 'acc-marie', name: 'Marie L.', initials: 'ML', role: 'representant', code: '2580', personId: 'p7' },
 ]
 
 export const useAppStore = create<AppState>((set) => ({
@@ -218,6 +301,7 @@ export const useAppStore = create<AppState>((set) => ({
   people: PEOPLE,
   groups: GROUPS,
   events: EVENTS,
+  reports: REPORTS,
 
   conversations: INITIAL_CONVERSATIONS,
   activeConversationId: 1,
@@ -323,6 +407,15 @@ export const useAppStore = create<AppState>((set) => ({
       ),
     })),
 
+  addReport: (r) =>
+    set((s) => ({ reports: [{ ...r, id: `r${++reportCounter}` }, ...s.reports] })),
+
+  updateReport: (id, r) =>
+    set((s) => ({ reports: s.reports.map((x) => (x.id === id ? { ...r, id } : x)) })),
+
+  deleteReport: (id) =>
+    set((s) => ({ reports: s.reports.filter((x) => x.id !== id) })),
+
   setConversation: (id) => set({ activeConversationId: id }),
 
   sendMessage: (text) =>
@@ -373,12 +466,22 @@ export const useAppStore = create<AppState>((set) => ({
 
 /* ---------- Selectors / helpers ---------- */
 
+/** Is the person in the given audience (direct id or via a group)? Works for
+ * events and reports — anything carrying personIds + groupIds. */
+export function isPersonInScope(
+  scope: { personIds: string[]; groupIds: string[] },
+  personId: string,
+  groups: Group[]
+): boolean {
+  if (scope.personIds.includes(personId)) return true
+  return scope.groupIds.some((gid) => groups.find((g) => g.id === gid)?.memberIds.includes(personId))
+}
+
 /** Is the given person assigned to the event (directly or via a group)? */
 export function isPersonInEvent(
   event: AgendaEvent,
   personId: string,
   groups: Group[]
 ): boolean {
-  if (event.personIds.includes(personId)) return true
-  return event.groupIds.some((gid) => groups.find((g) => g.id === gid)?.memberIds.includes(personId))
+  return isPersonInScope(event, personId, groups)
 }

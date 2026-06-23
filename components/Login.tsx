@@ -23,7 +23,6 @@ export default function Login() {
 
   const selected = accounts.find((a) => a.id === selectedId)
 
-  // When the account changes, decide whether a code already exists.
   useEffect(() => {
     setPhase(selected && selected.code === null ? 'create' : 'enter')
     setPin(''); setCreatedPin(''); setError('')
@@ -53,101 +52,99 @@ export default function Login() {
 
   return (
     <div className="login-wrap">
-      {/* Branding panel */}
+      {/* Brand — logo in its real colours + establishment name */}
       <div className="login-brand">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 28 }}>
-          <div style={{
-            width: 72, height: 72, borderRadius: 20, background: 'rgba(255,255,255,0.18)', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <LogoMark />
-          </div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, margin: 0, lineHeight: 1.1 }}>
-            Mes Droits,<br />Ma Voix
-          </h1>
+        <LogoMark />
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, margin: '18px 0 0', lineHeight: 1.1, color: C.ink }}>
+          Mes Droits,<br /><span style={{ color: C.primary }}>Ma Voix</span>
+        </h1>
+        <div style={{
+          marginTop: 20, padding: '8px 18px', borderRadius: 999,
+          background: C.light, border: `1px solid ${C.primary}33`,
+          fontSize: 16, fontWeight: 700, color: C.primaryDark,
+        }}>
+          ESAT COS Regain
         </div>
-        <p style={{ fontSize: 20, lineHeight: 1.5, color: 'rgba(255,255,255,0.92)', maxWidth: 420, margin: 0 }}>
-          Votre espace pour comprendre vos droits, suivre les réunions et parler à vos représentants.
+        <p style={{ marginTop: 16, fontSize: 15, color: C.sub, maxWidth: 280, lineHeight: 1.5 }}>
+          Mes droits et ma parole en ESAT.
         </p>
       </div>
 
-      {/* Login panel (off-centered to the right) */}
-      <div className="login-panel">
-        <div style={{
-          background: '#fff', borderRadius: 20, padding: 26, width: '100%', maxWidth: 340,
-          boxShadow: '0 16px 44px rgba(0,0,0,0.18)', boxSizing: 'border-box',
+      <div className="login-divider" />
+
+      {/* Form — blended onto the light page, no card */}
+      <div className="login-form">
+        <h2 style={{
+          fontFamily: 'var(--font-main)', fontSize: 14, fontWeight: 700, color: C.sub,
+          textTransform: 'uppercase', letterSpacing: '0.16em', margin: '0 0 18px',
         }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, color: C.ink, margin: '0 0 18px' }}>
-            Connexion
-          </h2>
+          Connexion
+        </h2>
 
-          {/* Account selector */}
-          <label htmlFor="account" style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
-            Votre compte
-          </label>
-          <select
-            id="account"
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-            style={{
-              width: '100%', padding: '12px 13px', fontSize: 16, borderRadius: 10,
-              border: `1px solid ${C.line}`, background: C.bg, color: C.ink,
-              fontFamily: 'inherit', cursor: 'pointer', boxSizing: 'border-box', marginBottom: 16,
-            }}
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name} — {ROLE_LABEL[a.role]}</option>
-            ))}
-          </select>
+        <label htmlFor="account" style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
+          Votre compte
+        </label>
+        <select
+          id="account"
+          value={selectedId}
+          onChange={(e) => setSelectedId(e.target.value)}
+          style={{
+            width: '100%', padding: '13px 13px', fontSize: 16, borderRadius: 11,
+            border: `1px solid ${C.line}`, background: '#fff', color: C.ink,
+            fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer', boxSizing: 'border-box', marginBottom: 18,
+          }}
+        >
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.name} — {ROLE_LABEL[a.role]}</option>
+          ))}
+        </select>
 
-          {/* Instruction */}
-          <p style={{ textAlign: 'center', fontSize: 14, color: C.sub, margin: '0 0 12px', lineHeight: 1.35 }}>
-            {phase === 'enter'   && 'Entrez votre code à 4 chiffres'}
-            {phase === 'create'  && 'Première connexion : choisissez votre code'}
-            {phase === 'confirm' && 'Confirmez votre code'}
-          </p>
+        <p style={{ textAlign: 'center', fontSize: 14, color: C.sub, margin: '0 0 14px', lineHeight: 1.35 }}>
+          {phase === 'enter'   && 'Entrez votre code à 4 chiffres'}
+          {phase === 'create'  && 'Première connexion : choisissez votre code'}
+          {phase === 'confirm' && 'Confirmez votre code'}
+        </p>
 
-          {/* Pin dots */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 6 }}>
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} style={{
-                width: 16, height: 16, borderRadius: '50%',
-                background: i < pin.length ? C.primary : 'transparent',
-                border: `2px solid ${i < pin.length ? C.primary : '#d6d3d1'}`,
-              }} />
-            ))}
-          </div>
+        {/* Pin dots */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 6 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} style={{
+              width: 16, height: 16, borderRadius: '50%',
+              background: i < pin.length ? C.primary : 'transparent',
+              border: `2px solid ${i < pin.length ? C.primary : '#CBD5E1'}`,
+            }} />
+          ))}
+        </div>
 
-          {/* Error line (reserved height) */}
-          <div style={{ minHeight: 20, textAlign: 'center', marginBottom: 6 }}>
-            {error && <span style={{ color: '#dc2626', fontSize: 13, fontWeight: 600 }}>{error}</span>}
-          </div>
+        {/* Error line (reserved height) */}
+        <div style={{ minHeight: 20, textAlign: 'center', marginBottom: 8 }}>
+          {error && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 700 }}>{error}</span>}
+        </div>
 
-          {/* Keypad */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
-              <KeyButton key={d} onClick={() => onDigit(d)}>{d}</KeyButton>
-            ))}
-            <div />
-            <KeyButton onClick={() => onDigit('0')}>0</KeyButton>
-            <KeyButton onClick={onDelete} aria-label="Effacer">
-              <i className="ti ti-backspace" style={{ fontSize: 22 }} />
-            </KeyButton>
-          </div>
+        {/* Keypad */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
+            <KeyButton key={d} onClick={() => onDigit(d)}>{d}</KeyButton>
+          ))}
+          <div />
+          <KeyButton onClick={() => onDigit('0')}>0</KeyButton>
+          <KeyButton onClick={onDelete} aria-label="Effacer">
+            <i className="ti ti-backspace" style={{ fontSize: 22 }} />
+          </KeyButton>
         </div>
       </div>
     </div>
   )
 }
 
-/** The Porte-Voix megaphone mark, drawn in white for the coral panel. */
+/** Porte-Voix mark in its brand colours. */
 function LogoMark() {
   return (
-    <svg width="44" height="40" viewBox="-64 -40 130 85" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M-44,-18 L8,-32 a9,9 0 0 1 11,8 V24 a9,9 0 0 1 -11,8 L-44,18 Z" fill="#fff" />
-      <rect x="-56" y="-18" width="14" height="36" rx="6" fill="#fff" opacity="0.85" />
-      <path d="M-31,21 v14 a10,10 0 0 0 16,0 v-8 Z" fill="#fff" />
-      <g stroke="#fff" strokeWidth="5" strokeLinecap="round" fill="none">
+    <svg width="92" height="78" viewBox="-64 -42 130 88" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M-44,-18 L8,-32 a9,9 0 0 1 11,8 V24 a9,9 0 0 1 -11,8 L-44,18 Z" fill="#FF6B5E" />
+      <rect x="-56" y="-18" width="14" height="36" rx="6" fill="#1E293B" />
+      <path d="M-31,21 v14 a10,10 0 0 0 16,0 v-8 Z" fill="#FF6B5E" />
+      <g stroke="#16A34A" strokeWidth="5" strokeLinecap="round" fill="none">
         <path d="M29,-21 q11,4 11,21" />
         <path d="M40,-32 q21,8 21,32" />
       </g>
@@ -163,13 +160,18 @@ function KeyButton({
       onClick={onClick}
       {...rest}
       style={{
-        height: 48, borderRadius: 12, border: `1px solid ${C.line}`, background: C.bg,
-        color: C.ink, fontSize: 22, fontWeight: 600, cursor: 'pointer',
+        height: 52, borderRadius: 12, border: `1px solid ${C.line}`, background: '#fff',
+        color: C.ink, fontSize: 23, fontWeight: 600, cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background 0.12s, border-color 0.12s',
       }}
       onMouseDown={(e) => { (e.currentTarget as HTMLElement).style.background = C.light }}
-      onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.background = C.bg }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = C.bg }}
+      onMouseUp={(e) => { (e.currentTarget as HTMLElement).style.background = '#fff' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = C.primary }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget as HTMLElement
+        el.style.background = '#fff'; el.style.borderColor = C.line
+      }}
     >
       {children}
     </button>

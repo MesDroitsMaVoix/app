@@ -24,6 +24,21 @@ const ROLE_LABEL: Record<Role, string> = {
   accompagnateur: 'Accompagnateur',
 }
 
+/** Porte-Voix mark for the dark sidebar (coral body, green waves, white handle). */
+function LogoMark() {
+  return (
+    <svg width="40" height="34" viewBox="-64 -42 130 88" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M-44,-18 L8,-32 a9,9 0 0 1 11,8 V24 a9,9 0 0 1 -11,8 L-44,18 Z" fill="#FF6B5E" />
+      <rect x="-56" y="-18" width="14" height="36" rx="6" fill="#fff" />
+      <path d="M-31,21 v14 a10,10 0 0 0 16,0 v-8 Z" fill="#FF6B5E" />
+      <g stroke="#16A34A" strokeWidth="5" strokeLinecap="round" fill="none">
+        <path d="M29,-21 q11,4 11,21" />
+        <path d="M40,-32 q21,8 21,32" />
+      </g>
+    </svg>
+  )
+}
+
 export default function Sidebar() {
   const { activePage, role, accounts, currentAccountId, setPage } = useAppStore()
   const NAV_ITEMS = navItems(role)
@@ -39,8 +54,7 @@ export default function Sidebar() {
       style={{
         width: 250,
         minWidth: 250,
-        background: '#fff',
-        borderRight: `1px solid ${C.line}`,
+        background: C.ink,
         display: 'flex',
         flexDirection: 'column',
         padding: '20px 14px',
@@ -50,15 +64,15 @@ export default function Sidebar() {
       }}
     >
       {/* Logo */}
-      <div style={{ padding: '6px 10px 18px' }}>
-        <Image
-          src="/logo_portevoix_vertical.svg"
-          alt="Mes Droits, Ma Voix"
-          width={150}
-          height={125}
-          priority
-          style={{ width: 150, height: 'auto' }}
-        />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 8px 20px' }}>
+        <LogoMark />
+        <span style={{
+          fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 600,
+          color: '#fff', lineHeight: 1.1,
+        }}>
+          Mes Droits,<br />
+          <span style={{ color: C.primary }}>Ma Voix</span>
+        </span>
       </div>
 
       {/* Nav items */}
@@ -75,11 +89,12 @@ export default function Sidebar() {
               border: 'none', cursor: 'pointer', textAlign: 'left',
               fontSize: 16, fontWeight: 600, whiteSpace: 'nowrap',
               transition: 'background 0.15s, color 0.15s',
-              background: active ? C.light : 'transparent',
-              color: active ? C.primaryDark : C.sub,
+              background: active ? C.primary : 'transparent',
+              color: active ? '#fff' : 'rgba(255,255,255,0.72)',
+              boxShadow: active ? '0 4px 12px rgba(255,107,94,0.35)' : 'none',
             }}
             onMouseEnter={(e) => {
-              if (!active) (e.currentTarget as HTMLElement).style.background = C.bg
+              if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'
             }}
             onMouseLeave={(e) => {
               if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
@@ -97,19 +112,19 @@ export default function Sidebar() {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: 12, borderRadius: 12,
-        background: C.bg, border: `1px solid ${C.line}`, boxSizing: 'border-box',
+        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', boxSizing: 'border-box',
       }}>
         <div style={{
           width: 40, height: 40, borderRadius: '50%',
-          background: C.mid, color: C.primaryDark,
+          background: C.primary, color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 15, fontWeight: 700, flexShrink: 0,
         }}>
           {initials}
         </div>
         <div>
-          <div style={{ fontSize: 14, color: C.ink, fontWeight: 600 }}>{name}</div>
-          <div style={{ fontSize: 12, color: C.sub }}>{roleLabel}</div>
+          <div style={{ fontSize: 14, color: '#fff', fontWeight: 600 }}>{name}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{roleLabel}</div>
         </div>
       </div>
     </nav>

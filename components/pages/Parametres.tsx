@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 
@@ -30,11 +30,6 @@ export default function Parametres() {
     setMessage({ type: 'ok', text: 'Votre code a bien été modifié.' })
   }
 
-  const field: React.CSSProperties = {
-    width: '100%', padding: '14px 16px', fontSize: 22, letterSpacing: '0.3em', textAlign: 'center',
-    borderRadius: 12, border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-  }
-
   return (
     <div style={{ maxWidth: 560 }}>
       <PageIntro
@@ -59,33 +54,19 @@ export default function Parametres() {
           Choisissez un nouveau code à 4 chiffres. Vous l&apos;utiliserez à votre prochaine connexion.
         </p>
 
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
-          Nouveau code
-        </label>
-        <input
-          value={code}
-          onChange={(e) => { setCode(onlyDigits(e.target.value)); setMessage(null) }}
-          inputMode="numeric"
-          type="password"
-          autoComplete="off"
-          placeholder="••••"
-          aria-label="Nouveau code"
-          style={{ ...field, marginBottom: 14 }}
-        />
+        <div style={{ marginBottom: 16 }}>
+          <PinField
+            label="Nouveau code"
+            value={code}
+            onChange={(v) => { setCode(v); setMessage(null) }}
+          />
+        </div>
 
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
-          Confirmez le code
-        </label>
-        <input
+        <PinField
+          label="Confirmez le code"
           value={confirm}
-          onChange={(e) => { setConfirm(onlyDigits(e.target.value)); setMessage(null) }}
-          onKeyDown={(e) => { if (e.key === 'Enter') save() }}
-          inputMode="numeric"
-          type="password"
-          autoComplete="off"
-          placeholder="••••"
-          aria-label="Confirmez le code"
-          style={field}
+          onChange={(v) => { setConfirm(v); setMessage(null) }}
+          onComplete={save}
         />
 
         {message && (
@@ -110,6 +91,65 @@ export default function Parametres() {
           Enregistrer le nouveau code
         </button>
       </Card>
+    </div>
+  )
+}
+
+/** Four-box code field: always shows 4 slots so it's clear that 4 digits
+ * are expected. A hidden numeric input captures the typing. */
+function PinField({
+  label, value, onChange, onComplete,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  onComplete?: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const handle = (raw: string) => {
+    const v = onlyDigits(raw)
+    onChange(v)
+    if (v.length === 4) onComplete?.()
+  }
+
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
+        {label}
+      </label>
+      <div
+        onClick={() => inputRef.current?.focus()}
+        style={{ position: 'relative', display: 'flex', gap: 10, cursor: 'text' }}
+      >
+        {[0, 1, 2, 3].map((i) => {
+          const filled = i < value.length
+          return (
+            <div key={i} style={{
+              flex: 1, height: 56, borderRadius: 12,
+              border: `1px solid ${filled ? C.primary : C.line}`,
+              background: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {filled && <span style={{ width: 14, height: 14, borderRadius: '50%', background: C.primary }} />}
+            </div>
+          )
+        })}
+        {/* Transparent input on top to capture keystrokes */}
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => handle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && value.length === 4) onComplete?.() }}
+          inputMode="numeric"
+          autoComplete="off"
+          aria-label={label}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            opacity: 0, border: 'none', background: 'transparent', cursor: 'text',
+          }}
+        />
+      </div>
     </div>
   )
 }

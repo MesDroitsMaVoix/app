@@ -52,12 +52,21 @@ export function Card({ children, style }: { children: React.ReactNode; style?: R
   )
 }
 
+/* Avatar colour is picked from the brand palette by initials, so the UI
+ * uses the whole palette instead of one pale tint. */
+const AVATAR_COLORS = ['#FF6B5E', '#2563EB', '#16A34A', '#1E293B', '#7C3AED', '#D97706']
+function avatarColor(initials: string): string {
+  let h = 0
+  for (let i = 0; i < initials.length; i++) h = (h * 31 + initials.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+
 /* Colored avatar with initials */
 export function Avatar({ initials, size = 48 }: { initials: string; size?: number }) {
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
-      background: C.mid, color: C.primaryDark,
+      background: avatarColor(initials), color: '#fff',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontWeight: 700, fontSize: size * 0.36, flexShrink: 0,
     }}>
