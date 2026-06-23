@@ -1,12 +1,16 @@
 'use client'
 
-import { useAppStore } from '@/store/useAppStore'
+import { useAppStore, canManage } from '@/store/useAppStore'
+import { C } from '@/components/ui'
 
 const PAGE_TITLES = {
+  accueil: 'Accueil',
   droits: 'Mes Droits',
   agenda: 'Agenda',
+  comptes: 'Comptes rendus',
+  representants: 'Mes représentants',
   messagerie: 'Messagerie',
-  organisation: 'Organisation',
+  parametres: 'Paramètres',
 }
 
 const NOTIFICATIONS = [
@@ -17,8 +21,13 @@ const NOTIFICATIONS = [
 ]
 
 export default function Topbar() {
-  const { activePage, role, notifOpen, toggleRole, toggleNotif } = useAppStore()
-  const roleLabel = role === 'travailleur' ? 'Travailleur' : 'Accompagnateur'
+  const { activePage, role, notifOpen, logout, toggleNotif, setPage } = useAppStore()
+  const roleLabel =
+    role === 'travailleur' ? 'Travailleur' : role === 'representant' ? 'Représentant' : 'Accompagnateur'
+  const title =
+    activePage === 'representants' && canManage(role)
+      ? 'Gestion du personnel'
+      : PAGE_TITLES[activePage]
 
   return (
     <div style={{
@@ -26,7 +35,7 @@ export default function Topbar() {
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '18px 32px',
-      borderBottom: '1px solid #e7e5e4',
+      borderBottom: `1px solid ${C.line}`,
       background: '#fff',
       flexShrink: 0,
       position: 'relative',
@@ -36,10 +45,10 @@ export default function Topbar() {
         fontFamily: 'var(--font-display)',
         fontSize: '22px',
         fontWeight: 600,
-        color: '#1c1917',
+        color: C.ink,
         margin: 0,
       }}>
-        {PAGE_TITLES[activePage]}
+        {title}
       </h1>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -50,15 +59,15 @@ export default function Topbar() {
             style={{
               width: '40px', height: '40px', borderRadius: '10px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: '#fafaf9', border: '1px solid #e7e5e4',
-              color: '#78716c', fontSize: '20px', cursor: 'pointer',
+              background: C.bg, border: `1px solid ${C.line}`,
+              color: C.sub, fontSize: '20px', cursor: 'pointer',
               position: 'relative',
             }}
           >
             <i className="ti ti-bell" />
             <span style={{
               position: 'absolute', top: '8px', right: '8px',
-              width: '8px', height: '8px', background: '#ef4444',
+              width: '8px', height: '8px', background: C.primary,
               borderRadius: '50%', border: '2px solid #fff',
             }} />
           </button>
@@ -67,41 +76,70 @@ export default function Topbar() {
             <div style={{
               position: 'absolute', right: 0, top: '48px',
               width: '300px', background: '#fff',
-              border: '1px solid #e7e5e4', borderRadius: '12px',
-              zIndex: 100, boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              border: `1px solid ${C.line}`, borderRadius: '12px',
+              zIndex: 100, boxShadow: '0 8px 28px rgba(30,41,59,0.12)',
               maxHeight: '380px', overflowY: 'auto',
             }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid #f5f5f4', fontSize: '13px', fontWeight: 600 }}>
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.line}`, fontSize: '13px', fontWeight: 600, color: C.ink }}>
                 Notifications
               </div>
               {NOTIFICATIONS.map((n, i) => (
                 <div key={i} style={{
                   padding: '12px 16px',
-                  borderBottom: '1px solid #f5f5f4',
+                  borderBottom: `1px solid ${C.line}`,
                   cursor: 'pointer',
-                  borderLeft: n.read ? 'none' : '3px solid #1D6A5E',
+                  borderLeft: n.read ? 'none' : `3px solid ${C.primary}`,
                 }}>
-                  <div style={{ fontSize: '13px', color: '#1c1917', lineHeight: 1.4 }}>{n.msg}</div>
-                  <div style={{ fontSize: '11px', color: '#a8a29e', marginTop: '4px' }}>{n.time}</div>
+                  <div style={{ fontSize: '13px', color: C.ink, lineHeight: 1.4 }}>{n.msg}</div>
+                  <div style={{ fontSize: '11px', color: C.sub, marginTop: '4px' }}>{n.time}</div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Role toggle */}
+        {/* Current role badge */}
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '8px 16px', borderRadius: '999px',
+          border: `1px solid ${C.line}`, background: C.bg,
+          fontSize: '13px', fontWeight: 600, color: C.sub,
+        }}>
+          <i className="ti ti-user-circle" style={{ fontSize: '16px' }} />
+          {roleLabel}
+        </span>
+
+        {/* Settings */}
         <button
-          onClick={toggleRole}
+          onClick={() => setPage('parametres')}
+          aria-label="Paramètres"
+          title="Paramètres"
+          style={{
+            width: '40px', height: '40px', borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: activePage === 'parametres' ? C.light : C.bg,
+            border: `1px solid ${activePage === 'parametres' ? C.primary : C.line}`,
+            color: activePage === 'parametres' ? C.primaryDark : C.sub,
+            fontSize: '20px', cursor: 'pointer',
+          }}
+        >
+          <i className="ti ti-settings" />
+        </button>
+
+        {/* Logout */}
+        <button
+          onClick={logout}
+          title="Se déconnecter"
           style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             padding: '8px 16px', borderRadius: '999px',
-            border: '1px solid #e7e5e4', background: '#fafaf9',
-            fontSize: '13px', fontWeight: 500, color: '#44403c',
+            border: `1px solid ${C.line}`, background: C.bg,
+            fontSize: '13px', fontWeight: 600, color: C.sub,
             cursor: 'pointer',
           }}
         >
-          <i className="ti ti-user-circle" style={{ fontSize: '16px' }} />
-          {roleLabel}
+          <i className="ti ti-logout" style={{ fontSize: '16px' }} />
+          Déconnexion
         </button>
       </div>
     </div>

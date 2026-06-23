@@ -1,154 +1,116 @@
 'use client'
 
-import { useAppStore, PageId } from '@/store/useAppStore'
+import { useAppStore, PageId, Role, canManage } from '@/store/useAppStore'
+import { C } from '@/components/ui'
 
-const NAV_ITEMS: { id: PageId; icon: string; label: string }[] = [
-  { id: 'droits',       icon: 'ti-book-2',         label: 'Mes droits' },
-  { id: 'agenda',       icon: 'ti-calendar-event',  label: 'Agenda' },
-  { id: 'messagerie',   icon: 'ti-message-2',       label: 'Messagerie' },
-  { id: 'organisation', icon: 'ti-sitemap',          label: 'Organisation' },
-]
+type NavItem = { id: PageId; icon: string; label: string }
+
+function navItems(role: Role): NavItem[] {
+  return [
+    { id: 'accueil',     icon: 'ti-home',           label: 'Accueil' },
+    { id: 'droits',      icon: 'ti-book-2',         label: 'Mes droits' },
+    { id: 'agenda',      icon: 'ti-calendar-event', label: 'Agenda' },
+    { id: 'comptes',     icon: 'ti-file-text',      label: 'Comptes rendus' },
+    canManage(role)
+      ? { id: 'representants', icon: 'ti-users-group', label: 'Gestion du personnel' }
+      : { id: 'representants', icon: 'ti-users',       label: 'Mes représentants' },
+    { id: 'messagerie',  icon: 'ti-message-2',      label: 'Messagerie' },
+  ]
+}
+
+const ROLE_LABEL: Record<Role, string> = {
+  travailleur: 'Travailleur',
+  representant: 'Représentant',
+  accompagnateur: 'Accompagnateur',
+}
 
 export default function Sidebar() {
-  const { activePage, sidebarExpanded, role, setPage, toggleSidebar } = useAppStore()
+  const { activePage, role, accounts, currentAccountId, setPage } = useAppStore()
+  const NAV_ITEMS = navItems(role)
 
-  const name      = role === 'travailleur' ? 'Jean D.' : 'Sophie V.'
-  const initials  = role === 'travailleur' ? 'JD' : 'SV'
-  const roleLabel = role === 'travailleur' ? 'Travailleur' : 'Accompagnateur'
-
-  const W = sidebarExpanded ? 240 : 88
+  const me = accounts.find((a) => a.id === currentAccountId)
+  const name = me?.name ?? ''
+  const initials = me?.initials ?? '?'
+  const roleLabel = ROLE_LABEL[role]
 
   return (
-    <nav style={{
-      width: W,
-      minWidth: W,
-      background: '#0F6E56',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: sidebarExpanded ? 'flex-start' : 'center',
-      padding: sidebarExpanded ? '20px 14px' : '20px 10px',
-      gap: '4px',
-      flexShrink: 0,
-      transition: 'width 0.25s ease, min-width 0.25s ease',
-      overflow: 'hidden',
-      boxSizing: 'border-box',
-    }}>
-
+    <nav
+      aria-label="Menu principal"
+      style={{
+        width: 250,
+        minWidth: 250,
+        background: '#fff',
+        borderRight: `1px solid ${C.line}`,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '20px 14px',
+        gap: 4,
+        flexShrink: 0,
+        boxSizing: 'border-box',
+      }}
+    >
       {/* Logo */}
-      <button
-        onClick={toggleSidebar}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '10px',
-          marginBottom: '20px',
-          borderRadius: '12px',
-          cursor: 'pointer',
-          width: '100%',
-          justifyContent: sidebarExpanded ? 'flex-start' : 'center',
-          background: 'transparent',
-          border: 'none',
-        }}
-      >
-        <div style={{
-          width: '46px', height: '46px',
-          background: 'rgba(255,255,255,0.15)',
-          borderRadius: '12px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <i className="ti ti-shield-check" style={{ fontSize: '24px', color: '#fff' }} />
-        </div>
-        {sidebarExpanded && (
-          <span style={{
-            color: '#fff', fontWeight: 600, fontSize: '14px',
-            lineHeight: 1.3, textAlign: 'left', whiteSpace: 'nowrap',
-          }}>
-            Mes Droits<br />Ma Voix
-          </span>
-        )}
-      </button>
-
-      {/* Section label */}
-      {sidebarExpanded && (
-        <div style={{
-          fontSize: '10px', fontWeight: 600, letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)',
-          padding: '0 10px 6px', width: '100%',
-        }}>
-          Menu principal
-        </div>
-      )}
+      <div style={{ padding: '6px 10px 18px' }}>
+        <Image
+          src="/logo_portevoix_vertical.svg"
+          alt="Mes Droits, Ma Voix"
+          width={150}
+          height={125}
+          priority
+          style={{ width: 150, height: 'auto' }}
+        />
+      </div>
 
       {/* Nav items */}
-      {NAV_ITEMS.map((item) => (
-        <button
-          key={item.id}
-          onClick={() => setPage(item.id)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: sidebarExpanded ? '12px' : '0',
-            justifyContent: sidebarExpanded ? 'flex-start' : 'center',
-            width: '100%',
-            padding: '13px 10px',
-            borderRadius: '10px',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 500,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            transition: 'background 0.15s',
-            background: activePage === item.id ? 'rgba(255,255,255,0.18)' : 'transparent',
-            color: activePage === item.id ? '#fff' : 'rgba(255,255,255,0.7)',
-          }}
-          onMouseEnter={(e) => {
-            if (activePage !== item.id)
-              (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'
-          }}
-          onMouseLeave={(e) => {
-            if (activePage !== item.id)
-              (e.currentTarget as HTMLElement).style.background = 'transparent'
-          }}
-        >
-          <i className={`ti ${item.icon}`} style={{ fontSize: '26px', flexShrink: 0 }} />
-          {sidebarExpanded && <span>{item.label}</span>}
-        </button>
-      ))}
+      {NAV_ITEMS.map((item) => {
+        const active = activePage === item.id
+        return (
+          <button
+            key={item.id}
+            onClick={() => setPage(item.id)}
+            aria-current={active ? 'page' : undefined}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              width: '100%', padding: '14px 14px', borderRadius: 12,
+              border: 'none', cursor: 'pointer', textAlign: 'left',
+              fontSize: 16, fontWeight: 600, whiteSpace: 'nowrap',
+              transition: 'background 0.15s, color 0.15s',
+              background: active ? C.light : 'transparent',
+              color: active ? C.primaryDark : C.sub,
+            }}
+            onMouseEnter={(e) => {
+              if (!active) (e.currentTarget as HTMLElement).style.background = C.bg
+            }}
+            onMouseLeave={(e) => {
+              if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'
+            }}
+          >
+            <i className={`ti ${item.icon}`} style={{ fontSize: 25, flexShrink: 0 }} />
+            <span>{item.label}</span>
+          </button>
+        )
+      })}
 
       <div style={{ flex: 1 }} />
 
-      {/* Role badge */}
+      {/* Profile badge */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '10px',
-        borderRadius: '10px',
-        width: '100%',
-        background: 'rgba(255,255,255,0.1)',
-        justifyContent: sidebarExpanded ? 'flex-start' : 'center',
-        boxSizing: 'border-box',
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: 12, borderRadius: 12,
+        background: C.bg, border: `1px solid ${C.line}`, boxSizing: 'border-box',
       }}>
         <div style={{
-          width: '38px', height: '38px',
-          borderRadius: '50%',
-          background: '#9FE1CB',
-          color: '#0F6E56',
+          width: 40, height: 40, borderRadius: '50%',
+          background: C.mid, color: C.primaryDark,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '14px', fontWeight: 600,
-          flexShrink: 0,
+          fontSize: 15, fontWeight: 700, flexShrink: 0,
         }}>
           {initials}
         </div>
-        {sidebarExpanded && (
-          <div>
-            <div style={{ fontSize: '13px', color: '#fff', fontWeight: 500 }}>{name}</div>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{roleLabel}</div>
-          </div>
-        )}
+        <div>
+          <div style={{ fontSize: 14, color: C.ink, fontWeight: 600 }}>{name}</div>
+          <div style={{ fontSize: 12, color: C.sub }}>{roleLabel}</div>
+        </div>
       </div>
     </nav>
   )

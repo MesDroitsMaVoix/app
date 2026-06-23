@@ -1,0 +1,14 @@
+<svg width="240" height="200" viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+  <title>Mes Droits Ma Voix - logo vertical</title>
+  <g transform="translate(120,66)">
+    <path d="M-44,-18 L8,-32 a9,9 0 0 1 11,8 V24 a9,9 0 0 1 -11,8 L-44,18 Z" fill="#FF6B5E"/>
+    <rect x="-56" y="-18" width="14" height="36" rx="6" fill="#1E293B"/>
+    <path d="M-31,21 v14 a10,10 0 0 0 16,0 v-8 Z" fill="#FF6B5E"/>
+    <g stroke="#16A34A" stroke-width="5" stroke-linecap="round" fill="none">
+      <path d="M29,-21 q11,4 11,21"/>
+      <path d="M40,-32 q21,8 21,32"/>
+    </g>
+  </g>
+  <text x="120" y="148" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#1E293B">Mes Droits,</text>
+  <text x="120" y="178" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="24" font-weight="600" fill="#FF6B5E">Ma Voix</text>
+</svg>
