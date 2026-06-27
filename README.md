@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mes Droits, Ma Voix
 
-## Getting Started
+Application web pour ESAT : droits, agenda, comptes-rendus de réunions, ateliers
+et messagerie, avec deux types de comptes (administrateur et travailleur).
 
-First, run the development server:
+- **Sans configuration**, l'app tourne en **mode démo** : données en mémoire,
+  remises à zéro à chaque rechargement. Parfait pour tester.
+- **Avec Supabase configuré**, les données sont **persistées et partagées** entre
+  tous les utilisateurs, et les fichiers joints sont stockés en ligne.
+
+## Démarrer en local
 
 ```bash
+npm install        # (déjà fait dans ce dépôt)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ouvrir [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Comptes de démo : **Jean D.** (travailleur, chef d'atelier) code `1234` ·
+**Marie L.** (administratrice) code `2580`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## Passer en « vraie app » : base de données + fichiers (Supabase)
 
-To learn more about Next.js, take a look at the following resources:
+### 1. Créer le projet Supabase
+1. Aller sur [supabase.com](https://supabase.com) → **New project** (le palier
+   gratuit suffit). Noter le mot de passe de la base.
+2. Une fois le projet prêt, ouvrir **SQL Editor** → **New query**, coller tout le
+   contenu de [`supabase/schema.sql`](supabase/schema.sql) et cliquer **Run**.
+   Cela crée les tables et le bucket de fichiers (aucune donnée n'est insérée :
+   l'app se remplit toute seule au premier lancement).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Récupérer les clés
+Dans Supabase → **Project Settings → API** :
+- **Project URL** → variable `NEXT_PUBLIC_SUPABASE_URL`
+- **Project API keys → `service_role`** (secrète) → variable `SUPABASE_SERVICE_ROLE_KEY`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. En local
+```bash
+cp .env.local.example .env.local
+# puis remplir les deux valeurs dans .env.local
+npm run dev
+```
+Au premier lancement, les données de démo sont copiées dans Supabase. Ensuite,
+tout est persisté : rechargez la page, vos comptes-rendus sont toujours là.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Déployer en ligne (Vercel)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Pousser ce dépôt sur GitHub.
+2. Aller sur [vercel.com/new](https://vercel.com/new), importer le dépôt
+   (Vercel détecte Next.js automatiquement).
+3. Dans **Environment Variables**, ajouter les deux mêmes variables que ci-dessus :
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+4. Cliquer **Deploy**. L'app est en ligne sur une URL `…vercel.app`.
+
+À chaque `git push`, Vercel redéploie automatiquement.
+
+---
+
+## Architecture (en bref)
+
+- **Interface** : Next.js (App Router) + React, état client via Zustand
+  (`store/useAppStore.ts`).
+- **Persistance** : Server Actions (`app/actions.ts`) qui parlent à Supabase en
+  REST (`lib/supabaseRest.ts`). La clé `service_role` reste **uniquement côté
+  serveur**. Le store s'hydrate au démarrage et synchronise automatiquement chaque
+  changement vers la base.
+- **Fichiers** : les pièces jointes des comptes-rendus sont envoyées dans le
+  bucket Supabase **attachments** ; seule l'URL publique est stockée.
+
+### Limites connues (pistes d'amélioration)
+- Les Server Actions ne vérifient pas encore l'identité de l'appelant (la
+  connexion par code à 4 chiffres reste côté client). Pour un usage en
+  production sensible, ajouter une vraie session côté serveur.
+- Les conversations utilisent un identifiant numérique basé sur l'horodatage ;
+  suffisant ici, à renforcer si le volume de messagerie grandit.

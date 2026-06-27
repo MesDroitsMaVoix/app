@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=Fraunces:ital,wght@0,400;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -7,8 +7,8 @@
   --brand-blue: #2563EB;
   --brand-green: #16A34A;
   --brand-ink: #1E293B;
-  --font-main: 'Outfit', sans-serif;
-  --font-display: 'Fraunces', serif;
+  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Poppins', system-ui, sans-serif;
 }
 
 html, body {

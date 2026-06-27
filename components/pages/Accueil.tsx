@@ -1,7 +1,7 @@
 'use client'
 
 import { useAppStore, PageId } from '@/store/useAppStore'
-import { C, Card, Avatar } from '@/components/ui'
+import { C, Card } from '@/components/ui'
 
 const SHORTCUTS: { id: PageId; icon: string; label: string; desc: string }[] = [
   { id: 'droits',        icon: 'ti-book-2',         label: 'Mes droits',        desc: 'Comprendre mes droits simplement' },
@@ -11,14 +11,22 @@ const SHORTCUTS: { id: PageId; icon: string; label: string; desc: string }[] = [
   { id: 'messagerie',    icon: 'ti-message-2',      label: 'Messagerie',        desc: 'Poser une question, proposer une idée' },
 ]
 
-const NEW_ARRIVALS = [
-  { name: 'Lucas P.', initials: 'LP', info: 'Nouveau travailleur — Atelier Espaces verts' },
-  { name: 'Emma R.',  initials: 'ER', info: 'Stagiaire — Atelier Cuisine' },
-]
+function formatDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
 
 export default function Accueil() {
-  const { role, setPage } = useAppStore()
-  const firstName = role === 'travailleur' ? 'Jean' : 'Sophie'
+  const { accounts, currentAccountId, events, setPage } = useAppStore()
+  const me = accounts.find((a) => a.id === currentAccountId)
+  const firstName = me?.name.split(' ')[0] ?? 'Bonjour'
+
+  // Soonest upcoming meeting (today or later), if any.
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const nextEvent = [...events]
+    .filter((e) => e.date >= todayIso)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0]
 
   return (
     <div style={{ maxWidth: 1180 }}>
@@ -35,33 +43,37 @@ export default function Accueil() {
         </p>
       </div>
 
-      {/* Next event highlight */}
-      <Card style={{ marginBottom: 28, display: 'flex', alignItems: 'center', gap: 18, borderLeft: `6px solid ${C.primary}` }}>
-        <div style={{
-          width: 56, height: 56, borderRadius: 14, background: C.light,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>
-          <i className="ti ti-calendar-star" style={{ fontSize: 30, color: C.primary }} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, color: C.sub, fontWeight: 600 }}>Prochaine réunion importante</div>
-          <div style={{ fontSize: 20, fontWeight: 600, color: C.ink }}>Conseil de la Vie Sociale (CVS)</div>
-          <div style={{ fontSize: 16, color: C.sub }}>Jeudi 25 juin 2026 · 14h00 · Salle de réunion</div>
-        </div>
-        <button
-          onClick={() => setPage('agenda')}
-          style={{
-            background: C.primary, color: '#fff', border: 'none', borderRadius: 12,
-            padding: '12px 18px', fontSize: 16, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-          }}
-        >
-          Voir l'agenda
-        </button>
-      </Card>
+      {/* Next event highlight — only when there is an upcoming meeting */}
+      {nextEvent && (
+        <Card style={{ marginBottom: 28, display: 'flex', alignItems: 'center', gap: 18, borderLeft: `6px solid ${C.primary}` }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 14, background: C.light,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <i className="ti ti-calendar-star" style={{ fontSize: 30, color: C.primary }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, color: C.sub, fontWeight: 600 }}>Prochaine réunion</div>
+            <div style={{ fontSize: 20, fontWeight: 600, color: C.ink }}>{nextEvent.title}</div>
+            <div style={{ fontSize: 16, color: C.sub, textTransform: 'capitalize' }}>
+              {formatDate(nextEvent.date)} · {nextEvent.time} · {nextEvent.place}
+            </div>
+          </div>
+          <button
+            onClick={() => setPage('agenda')}
+            style={{
+              background: C.primary, color: '#fff', border: 'none', borderRadius: 12,
+              padding: '12px 18px', fontSize: 16, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            Voir l&apos;agenda
+          </button>
+        </Card>
+      )}
 
       {/* Shortcuts */}
       <h3 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: '0 0 14px' }}>Que voulez-vous faire ?</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 30 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
         {SHORTCUTS.map((s) => (
           <button
             key={s.id}
@@ -87,23 +99,6 @@ export default function Accueil() {
           </button>
         ))}
       </div>
-
-      {/* New arrivals */}
-      <h3 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: '0 0 14px' }}>Nouveaux arrivants</h3>
-      <Card>
-        {NEW_ARRIVALS.map((p, i) => (
-          <div key={p.name} style={{
-            display: 'flex', alignItems: 'center', gap: 14,
-            padding: '12px 0', borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
-          }}>
-            <Avatar initials={p.initials} />
-            <div>
-              <div style={{ fontSize: 17, fontWeight: 600, color: C.ink }}>{p.name}</div>
-              <div style={{ fontSize: 14, color: C.sub }}>{p.info}</div>
-            </div>
-          </div>
-        ))}
-      </Card>
     </div>
   )
 }

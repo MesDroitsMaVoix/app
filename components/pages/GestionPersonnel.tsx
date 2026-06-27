@@ -5,25 +5,24 @@ import { useAppStore, PersonKind } from '@/store/useAppStore'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 
 const KIND_LABEL: Record<PersonKind, string> = {
+  admin: 'Administrateur',
   travailleur: 'Travailleur',
-  stagiaire: 'Stagiaire',
-  representant: 'Représentant',
 }
 const KIND_COLOR: Record<PersonKind, string> = {
+  admin: '#7C3AED',       // violet
   travailleur: '#2563EB', // bleu
-  stagiaire: '#D97706',   // ambre
-  representant: '#7C3AED', // violet
 }
 
 export default function GestionPersonnel() {
-  const { people, groups, createGroup, deleteGroup, toggleGroupMember, addPerson, deletePerson, setPage } = useAppStore()
+  const { people, groups, ateliers, accounts, createGroup, deleteGroup, toggleGroupMember, toggleGroupAtelier, addPerson, deletePerson, regenerateCode, setPage } = useAppStore()
+  const accountForPerson = (personId: string) => accounts.find((a) => a.personId === personId)
+  const atelierById = (id: string) => ateliers.find((a) => a.id === id)
   const [newName, setNewName] = useState('')
   const [openGroupId, setOpenGroupId] = useState<string | null>(null)
 
   // add-person form
   const [showAddPerson, setShowAddPerson] = useState(false)
   const [pName, setPName] = useState('')
-  const [pAtelier, setPAtelier] = useState('')
   const [pKind, setPKind] = useState<PersonKind>('travailleur')
 
   // delete confirmation
@@ -42,8 +41,8 @@ export default function GestionPersonnel() {
   const handleAddPerson = () => {
     const name = pName.trim()
     if (!name) return
-    const code = addPerson({ name, atelier: pAtelier.trim() || 'Non précisé', kind: pKind })
-    setPName(''); setPAtelier(''); setPKind('travailleur'); setShowAddPerson(false)
+    const code = addPerson({ name, atelier: 'Non précisé', kind: pKind })
+    setPName(''); setPKind('travailleur'); setShowAddPerson(false)
     setNewAccount({ name, code })
   }
 
@@ -54,8 +53,10 @@ export default function GestionPersonnel() {
       <PageIntro
         icon="ti-users-group"
         title="Gestion du personnel"
-        text="Créez des groupes de personnes, gérez leurs membres, puis assignez-les aux réunions depuis l'agenda."
+        text="Désignez les chefs d'atelier et leurs suppléants, créez des groupes, puis assignez les personnes aux réunions depuis l'agenda."
       />
+
+      <AteliersSection />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
         {/* ---------- Groups ---------- */}
@@ -101,7 +102,10 @@ export default function GestionPersonnel() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 18, fontWeight: 600, color: C.ink }}>{g.name}</div>
-                      <div style={{ fontSize: 14, color: C.sub }}>{g.memberIds.length} personne(s)</div>
+                      <div style={{ fontSize: 14, color: C.sub }}>
+                        {g.atelierIds.length > 0 && <>{g.atelierIds.length} atelier(s) · </>}
+                        {g.memberIds.length} personne(s)
+                      </div>
                     </div>
                     <button
                       onClick={() => setOpenGroupId(isOpen ? null : g.id)}
@@ -123,9 +127,23 @@ export default function GestionPersonnel() {
                     </button>
                   </div>
 
-                  {/* Member chips */}
-                  {g.memberIds.length > 0 && !isOpen && (
+                  {/* Atelier + member chips */}
+                  {(g.atelierIds.length > 0 || g.memberIds.length > 0) && !isOpen && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 18px 18px' }}>
+                      {g.atelierIds.map((id) => {
+                        const a = atelierById(id)
+                        if (!a) return null
+                        return (
+                          <span key={id} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            background: C.light, border: `1px solid ${C.primary}55`, borderRadius: 999,
+                            padding: '5px 12px', fontSize: 14, color: C.primaryDark, fontWeight: 600,
+                          }}>
+                            <i className="ti ti-tools" style={{ fontSize: 15 }} />
+                            {a.name}
+                          </span>
+                        )
+                      })}
                       {g.memberIds.map((id) => {
                         const p = personById(id)
                         if (!p) return null
@@ -147,7 +165,39 @@ export default function GestionPersonnel() {
                   {isOpen && (
                     <div style={{ borderTop: `1px solid ${C.line}`, padding: 14, background: C.bg }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, margin: '0 0 10px', textTransform: 'uppercase' }}>
-                        Cochez les personnes du groupe
+                        Ateliers du groupe
+                      </div>
+                      {ateliers.length === 0 ? (
+                        <div style={{ fontSize: 14, color: C.sub, fontStyle: 'italic', marginBottom: 16 }}>Aucun atelier pour l&apos;instant.</div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, marginBottom: 16 }}>
+                          {ateliers.map((a) => {
+                            const inGroup = g.atelierIds.includes(a.id)
+                            return (
+                              <button
+                                key={a.id}
+                                onClick={() => toggleGroupAtelier(g.id, a.id)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
+                                  padding: '8px 10px', borderRadius: 10, cursor: 'pointer',
+                                  border: `1px solid ${inGroup ? C.primary : C.line}`,
+                                  background: inGroup ? C.light : '#fff',
+                                }}
+                              >
+                                <i className={`ti ${inGroup ? 'ti-square-check-filled' : 'ti-square'}`} style={{ fontSize: 22, color: inGroup ? C.primary : C.sub, flexShrink: 0 }} />
+                                <i className="ti ti-tools" style={{ fontSize: 20, color: C.primary, flexShrink: 0 }} />
+                                <span style={{ fontSize: 14, color: C.ink, lineHeight: 1.2 }}>
+                                  {a.name}
+                                  <span style={{ display: 'block', fontSize: 12, color: C.sub }}>{a.memberIds.length} membre(s)</span>
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, margin: '0 0 10px', textTransform: 'uppercase' }}>
+                        Personnes ajoutées individuellement
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
                         {people.map((p) => {
@@ -170,7 +220,7 @@ export default function GestionPersonnel() {
                               <Avatar initials={p.initials} size={30} />
                               <span style={{ fontSize: 14, color: C.ink, lineHeight: 1.2 }}>
                                 {p.name}
-                                <span style={{ display: 'block', fontSize: 12, color: C.sub }}>{p.atelier}</span>
+                                <span style={{ display: 'block', fontSize: 12, color: C.sub }}>{KIND_LABEL[p.kind]}</span>
                               </span>
                             </button>
                           )
@@ -207,14 +257,7 @@ export default function GestionPersonnel() {
                 aria-label="Nom de la personne"
                 style={personField}
               />
-              <input
-                value={pAtelier}
-                onChange={(e) => setPAtelier(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddPerson() }}
-                placeholder="Atelier ou rôle (ex : Atelier Cuisine)"
-                aria-label="Atelier ou rôle"
-                style={personField}
-              />
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.sub }}>Type de compte</div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {(Object.keys(KIND_LABEL) as PersonKind[]).map((k) => (
                   <button
@@ -276,6 +319,21 @@ export default function GestionPersonnel() {
                   {KIND_LABEL[p.kind]}
                 </span>
                 <button
+                  onClick={() => {
+                    const acc = accountForPerson(p.id)
+                    if (acc) setNewAccount({ name: p.name, code: regenerateCode(acc.id) })
+                  }}
+                  aria-label={`Régénérer le code de ${p.name}`}
+                  title="Régénérer le code d'accès"
+                  style={{
+                    width: 36, height: 36, borderRadius: 9, border: `1px solid ${C.line}`,
+                    background: '#fff', color: C.primary, cursor: 'pointer', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <i className="ti ti-key" style={{ fontSize: 18 }} />
+                </button>
+                <button
                   onClick={() => setConfirmDelete({ id: p.id, name: p.name })}
                   aria-label={`Supprimer ${p.name}`}
                   style={{
@@ -330,10 +388,10 @@ export default function GestionPersonnel() {
               <i className="ti ti-user-check" style={{ fontSize: 34, color: C.primary }} />
             </div>
             <h3 style={{ fontSize: 21, fontWeight: 600, color: C.ink, margin: '0 0 8px' }}>
-              Compte créé pour {newAccount.name}
+              Code d&apos;accès de {newAccount.name}
             </h3>
             <p style={{ fontSize: 16, color: C.sub, margin: '0 0 18px', lineHeight: 1.5 }}>
-              Donnez ce code à la personne pour sa <strong>première connexion</strong>.
+              Donnez ce code à la personne pour sa <strong>connexion</strong>.
               Elle pourra le changer ensuite dans ses paramètres.
             </p>
             <div style={{
@@ -411,6 +469,241 @@ export default function GestionPersonnel() {
       )}
     </div>
   )
+}
+
+/* ---------- Ateliers (chef + suppléants + membres) ---------- */
+
+function AteliersSection() {
+  const {
+    people, ateliers, createAtelier, deleteAtelier,
+    setAtelierChef, toggleAtelierSuppleant, toggleAtelierMember,
+  } = useAppStore()
+
+  const [newName, setNewName] = useState('')
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null)
+
+  // Only travailleurs can be chef, suppléant or member of an atelier.
+  const workers = people.filter((p) => p.kind !== 'admin')
+  const personById = (id: string) => people.find((p) => p.id === id)
+  const openAtelier = openId ? ateliers.find((a) => a.id === openId) ?? null : null
+
+  const handleCreate = () => {
+    const name = newName.trim()
+    if (!name) return
+    createAtelier(name)
+    setNewName('')
+  }
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <h3 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: '0 0 14px' }}>
+        Ateliers ({ateliers.length})
+      </h3>
+
+      {/* Create atelier */}
+      <Card style={{ marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
+        <i className="ti ti-tools" style={{ fontSize: 22, color: C.primary }} />
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
+          placeholder="Nom du nouvel atelier…"
+          aria-label="Nom du nouvel atelier"
+          style={{ flex: 1, padding: '12px 14px', fontSize: 16, borderRadius: 10, border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit' }}
+        />
+        <button
+          onClick={handleCreate}
+          style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 18px', fontSize: 16, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >
+          Créer
+        </button>
+      </Card>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+        {ateliers.map((a) => {
+          const chef = a.chefId ? personById(a.chefId) : null
+          return (
+            <Card key={a.id} style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 18 }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: C.light, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <i className="ti ti-tools" style={{ fontSize: 24, color: C.primary }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: C.ink }}>{a.name}</div>
+                  <div style={{ fontSize: 14, color: C.sub }}>
+                    {chef ? <>Chef : <strong style={{ color: C.ink }}>{chef.name}</strong></> : <span style={{ fontStyle: 'italic' }}>Aucun chef désigné</span>}
+                    {' · '}{a.memberIds.length} membre(s)
+                  </div>
+                </div>
+                <button onClick={() => setOpenId(a.id)} style={miniBtn(C.primary)}>
+                  <i className="ti ti-user-edit" style={{ fontSize: 18 }} />
+                  Gérer
+                </button>
+                <button
+                  onClick={() => setConfirmDelete({ id: a.id, name: a.name })}
+                  aria-label={`Supprimer ${a.name}`}
+                  style={{ width: 40, height: 40, borderRadius: 10, border: `1px solid ${C.line}`, background: '#fff', color: '#dc2626', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <i className="ti ti-trash" style={{ fontSize: 20 }} />
+                </button>
+              </div>
+
+              {a.suppleantIds.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 18px 18px' }}>
+                  {a.suppleantIds.map((id) => {
+                    const p = personById(id)
+                    if (!p) return null
+                    return (
+                      <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 999, padding: '5px 12px 5px 6px', fontSize: 13, color: C.ink }}>
+                        <Avatar initials={p.initials} size={22} />
+                        {p.name}
+                        <span style={{ fontSize: 11, fontWeight: 700, color: C.sub }}>suppléant</span>
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Manage-atelier modal */}
+      {openAtelier && (
+        <div
+          onClick={() => setOpenId(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, overflowY: 'auto' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label={`Gérer ${openAtelier.name}`}
+            style={{ background: '#fff', borderRadius: 18, padding: 24, maxWidth: 560, width: '100%', margin: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.2)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <div style={{ width: 46, height: 46, borderRadius: 12, background: C.light, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <i className="ti ti-tools" style={{ fontSize: 24, color: C.primary }} />
+              </div>
+              <h3 style={{ flex: 1, fontSize: 21, fontWeight: 600, color: C.ink, margin: 0 }}>{openAtelier.name}</h3>
+              <button onClick={() => setOpenId(null)} aria-label="Fermer" style={{ width: 40, height: 40, borderRadius: 10, border: `1px solid ${C.line}`, background: '#fff', color: C.sub, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <i className="ti ti-x" style={{ fontSize: 20 }} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Chef */}
+              <div>
+                <div style={subHeading}>Chef d&apos;atelier</div>
+                <select
+                  value={openAtelier.chefId ?? ''}
+                  onChange={(e) => setAtelierChef(openAtelier.id, e.target.value || null)}
+                  style={{ width: '100%', padding: '11px 12px', fontSize: 15, borderRadius: 10, border: `1px solid ${C.line}`, background: '#fff', color: C.ink, fontFamily: 'inherit', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  <option value="">— Aucun chef —</option>
+                  {workers.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Suppléants */}
+              <div>
+                <div style={subHeading}>Suppléants (mêmes droits que le chef)</div>
+                <PersonToggleGrid
+                  workers={workers.filter((p) => p.id !== openAtelier.chefId)}
+                  selected={openAtelier.suppleantIds}
+                  onToggle={(pid) => toggleAtelierSuppleant(openAtelier.id, pid)}
+                />
+              </div>
+
+              {/* Membres */}
+              <div>
+                <div style={subHeading}>Membres de l&apos;atelier</div>
+                <PersonToggleGrid
+                  workers={workers}
+                  selected={openAtelier.memberIds}
+                  onToggle={(pid) => toggleAtelierMember(openAtelier.id, pid)}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => setOpenId(null)}
+              style={{ marginTop: 22, width: '100%', padding: 14, borderRadius: 12, border: 'none', background: C.primary, color: '#fff', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Terminé
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div
+          onClick={() => setConfirmDelete(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="alertdialog"
+            aria-label="Confirmer la suppression"
+            style={{ background: '#fff', borderRadius: 18, padding: 28, maxWidth: 420, width: '100%', boxShadow: '0 12px 40px rgba(0,0,0,0.2)', textAlign: 'center' }}
+          >
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#fee2e2', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: 34, color: '#dc2626' }} />
+            </div>
+            <h3 style={{ fontSize: 21, fontWeight: 600, color: C.ink, margin: '0 0 8px' }}>Supprimer cet atelier ?</h3>
+            <p style={{ fontSize: 16, color: C.sub, margin: '0 0 24px', lineHeight: 1.5 }}>
+              <strong style={{ color: C.ink }}>{confirmDelete.name}</strong> sera supprimé. Les comptes rendus déjà rédigés restent, mais ne seront plus reliés à cet atelier.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDelete(null)} style={{ flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.line}`, background: '#fff', color: C.ink, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>
+                Annuler
+              </button>
+              <button onClick={() => { deleteAtelier(confirmDelete.id); setConfirmDelete(null) }} style={{ flex: 1, padding: 14, borderRadius: 12, border: 'none', background: '#dc2626', color: '#fff', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PersonToggleGrid({
+  workers, selected, onToggle,
+}: {
+  workers: { id: string; name: string; initials: string }[]
+  selected: string[]
+  onToggle: (personId: string) => void
+}) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+      {workers.map((p) => {
+        const on = selected.includes(p.id)
+        return (
+          <button
+            key={p.id}
+            onClick={() => onToggle(p.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+              padding: '8px 10px', borderRadius: 10, cursor: 'pointer',
+              border: `1px solid ${on ? C.primary : C.line}`, background: on ? C.light : '#fff',
+            }}
+          >
+            <i className={`ti ${on ? 'ti-square-check-filled' : 'ti-square'}`} style={{ fontSize: 20, color: on ? C.primary : C.sub, flexShrink: 0 }} />
+            <Avatar initials={p.initials} size={26} />
+            <span style={{ fontSize: 14, color: C.ink }}>{p.name}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+const subHeading: React.CSSProperties = {
+  fontSize: 13, fontWeight: 700, color: C.sub, margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em',
 }
 
 const personField: React.CSSProperties = {

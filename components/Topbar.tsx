@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { useAppStore, canManage } from '@/store/useAppStore'
 import { C } from '@/components/ui'
 
@@ -13,21 +14,48 @@ const PAGE_TITLES = {
   parametres: 'Paramètres',
 }
 
-const NOTIFICATIONS = [
-  { msg: 'Nouveau compte rendu CVS disponible', time: 'Il y a 1h', read: false },
-  { msg: 'Rappel : Réunion institutionnelle dans 7 jours', time: 'Ce matin', read: false },
-  { msg: 'Marie L. vous a répondu', time: 'Hier', read: true },
-  { msg: "Nouvel événement ajouté à l'agenda : Instance mixte", time: 'Il y a 2 jours', read: true },
-]
+/** Short relative time, e.g. "il y a 5 min". */
+function timeAgo(ts: number): string {
+  const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000))
+  if (sec < 60) return "à l'instant"
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `il y a ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `il y a ${h} h`
+  const d = Math.floor(h / 24)
+  return d < 7 ? `il y a ${d} j` : new Date(ts).toLocaleDateString('fr-FR')
+}
 
 export default function Topbar() {
-  const { activePage, role, notifOpen, logout, toggleNotif, setPage } = useAppStore()
-  const roleLabel =
-    role === 'travailleur' ? 'Travailleur' : role === 'representant' ? 'Représentant' : 'Accompagnateur'
+  const {
+    activePage, role, notifOpen, logout, toggleNotif, setPage,
+    notifications, accounts, currentAccountId, markNotificationsRead, setConversation,
+  } = useAppStore()
+  const roleLabel = role === 'admin' ? 'Administrateur' : 'Travailleur'
   const title =
     activePage === 'representants' && canManage(role)
       ? 'Gestion du personnel'
       : PAGE_TITLES[activePage]
+
+  // Notifications addressed to the current user, most recent first.
+  const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? ''
+  const myNotifications = notifications
+    .filter((n) => n.recipientIds.includes(viewerId))
+    .sort((a, b) => b.createdAt - a.createdAt)
+  const unreadCount = myNotifications.filter((n) => !n.readBy.includes(viewerId)).length
+
+  // Remember which were unread at the moment of opening, so the panel can still
+  // highlight them even after we mark everything read.
+  const unreadAtOpen = useRef<Set<string>>(new Set())
+  const openNotif = () => {
+    if (!notifOpen) {
+      unreadAtOpen.current = new Set(
+        myNotifications.filter((n) => !n.readBy.includes(viewerId)).map((n) => n.id)
+      )
+      if (unreadCount > 0) markNotificationsRead(viewerId)
+    }
+    toggleNotif()
+  }
 
   return (
     <div style={{
@@ -55,7 +83,8 @@ export default function Topbar() {
         {/* Notif */}
         <div style={{ position: 'relative' }}>
           <button
-            onClick={toggleNotif}
+            onClick={openNotif}
+            aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} non lue(s))` : ''}`}
             style={{
               width: '40px', height: '40px', borderRadius: '10px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -65,35 +94,59 @@ export default function Topbar() {
             }}
           >
             <i className="ti ti-bell" />
-            <span style={{
-              position: 'absolute', top: '8px', right: '8px',
-              width: '8px', height: '8px', background: C.primary,
-              borderRadius: '50%', border: '2px solid #fff',
-            }} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: '-4px', right: '-4px', minWidth: 18, height: 18,
+                padding: '0 4px', boxSizing: 'border-box',
+                background: C.primary, color: '#fff', fontSize: 11, fontWeight: 700,
+                borderRadius: 999, border: '2px solid #fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
 
           {notifOpen && (
             <div style={{
               position: 'absolute', right: 0, top: '48px',
-              width: '300px', background: '#fff',
+              width: '320px', background: '#fff',
               border: `1px solid ${C.line}`, borderRadius: '12px',
               zIndex: 100, boxShadow: '0 8px 28px rgba(30,41,59,0.12)',
-              maxHeight: '380px', overflowY: 'auto',
+              maxHeight: '420px', overflowY: 'auto',
             }}>
               <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.line}`, fontSize: '13px', fontWeight: 600, color: C.ink }}>
                 Notifications
               </div>
-              {NOTIFICATIONS.map((n, i) => (
-                <div key={i} style={{
-                  padding: '12px 16px',
-                  borderBottom: `1px solid ${C.line}`,
-                  cursor: 'pointer',
-                  borderLeft: n.read ? 'none' : `3px solid ${C.primary}`,
-                }}>
-                  <div style={{ fontSize: '13px', color: C.ink, lineHeight: 1.4 }}>{n.msg}</div>
-                  <div style={{ fontSize: '11px', color: C.sub, marginTop: '4px' }}>{n.time}</div>
+              {myNotifications.length === 0 ? (
+                <div style={{ padding: '24px 16px', textAlign: 'center', color: C.sub, fontSize: 14 }}>
+                  Aucune notification.
                 </div>
-              ))}
+              ) : (
+                myNotifications.map((n) => {
+                  const wasUnread = unreadAtOpen.current.has(n.id)
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() => {
+                        if (n.convId != null) setConversation(n.convId)
+                        if (n.page) setPage(n.page)
+                      }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        padding: '12px 16px', border: 'none',
+                        borderBottom: `1px solid ${C.line}`,
+                        cursor: n.page ? 'pointer' : 'default',
+                        background: wasUnread ? C.light : '#fff',
+                        borderLeft: wasUnread ? `3px solid ${C.primary}` : '3px solid transparent',
+                      }}
+                    >
+                      <div style={{ fontSize: '13px', color: C.ink, lineHeight: 1.4, fontWeight: wasUnread ? 600 : 400 }}>{n.text}</div>
+                      <div style={{ fontSize: '11px', color: C.sub, marginTop: '4px' }}>{timeAgo(n.createdAt)}</div>
+                    </button>
+                  )
+                })
+              )}
             </div>
           )}
         </div>

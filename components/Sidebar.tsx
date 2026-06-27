@@ -1,6 +1,6 @@
 'use client'
 
-import { useAppStore, PageId, Role, canManage } from '@/store/useAppStore'
+import { useAppStore, PageId, Role, canManage, conversationParticipants, isConversationUnread } from '@/store/useAppStore'
 import { C } from '@/components/ui'
 
 type NavItem = { id: PageId; icon: string; label: string }
@@ -19,9 +19,8 @@ function navItems(role: Role): NavItem[] {
 }
 
 const ROLE_LABEL: Record<Role, string> = {
+  admin: 'Administrateur',
   travailleur: 'Travailleur',
-  representant: 'Représentant',
-  accompagnateur: 'Accompagnateur',
 }
 
 /** Porte-Voix mark for the dark sidebar (coral body, green waves, white handle). */
@@ -40,13 +39,19 @@ function LogoMark() {
 }
 
 export default function Sidebar() {
-  const { activePage, role, accounts, currentAccountId, setPage } = useAppStore()
+  const { activePage, role, accounts, currentAccountId, conversations, setPage } = useAppStore()
   const NAV_ITEMS = navItems(role)
 
   const me = accounts.find((a) => a.id === currentAccountId)
   const name = me?.name ?? ''
   const initials = me?.initials ?? '?'
   const roleLabel = ROLE_LABEL[role]
+
+  // Unread-messages indicator for the Messagerie tab.
+  const viewerId = me?.personId ?? ''
+  const hasUnreadMessages = conversations.some(
+    (c) => conversationParticipants(c).includes(viewerId) && isConversationUnread(c, viewerId)
+  )
 
   return (
     <nav
@@ -102,6 +107,12 @@ export default function Sidebar() {
           >
             <i className={`ti ${item.icon}`} style={{ fontSize: 25, flexShrink: 0 }} />
             <span>{item.label}</span>
+            {item.id === 'messagerie' && hasUnreadMessages && (
+              <span style={{
+                marginLeft: 'auto', width: 10, height: 10, borderRadius: '50%',
+                background: active ? '#fff' : C.primary, flexShrink: 0,
+              }} />
+            )}
           </button>
         )
       })}

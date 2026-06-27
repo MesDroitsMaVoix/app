@@ -5,9 +5,8 @@ import { useAppStore } from '@/store/useAppStore'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 
 const ROLE_LABEL = {
+  admin: 'Administrateur',
   travailleur: 'Travailleur',
-  representant: 'Représentant',
-  accompagnateur: 'Accompagnateur',
 } as const
 
 const onlyDigits = (v: string) => v.replace(/\D/g, '').slice(0, 4)

@@ -1,7 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { useAppStore, canManage, isPersonInScope, CURRENT_USER_ID, Report, ReportAction, EventType, Group, Person } from '@/store/useAppStore'
+import {
+  useAppStore, canManage, isPersonInScope, groupPersonIds, ateliersLedBy, CURRENT_USER_ID,
+  Report, ReportAction, ReportAttachment, EventType, Group, Person, Atelier,
+} from '@/store/useAppStore'
+import { uploadAttachment } from '@/app/actions'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 
 const TYPE_COLORS: Record<EventType, string> = {
@@ -13,12 +17,35 @@ const TYPE_COLORS: Record<EventType, string> = {
 const TYPES: EventType[] = ['CVS', 'Atelier', 'Institution', 'Mixte']
 
 export default function ComptesRendus() {
-  const { role, reports, groups, people, accounts, currentAccountId, addReport, updateReport, deleteReport } = useAppStore()
+  const { role, reports, groups, people, ateliers, accounts, currentAccountId, addReport, updateReport, deleteReport, validateReport } = useAppStore()
   const isStaff = canManage(role)
 
-  // Travailleur only sees reports they have access to
   const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? CURRENT_USER_ID
-  const visibleReports = isStaff ? reports : reports.filter((r) => isPersonInScope(r, viewerId, groups))
+
+  // Ateliers led by the current worker (chef or suppléant).
+  const myAteliers = ateliersLedBy(viewerId, ateliers)
+  const isLead = !isStaff && myAteliers.length > 0
+  const myAtelierIds = myAteliers.map((a) => a.id)
+  const canCompose = isStaff || isLead
+
+  // A lead may edit/delete a report only while it is pending and it belongs to
+  // one of their ateliers (or they authored it).
+  const canEditReport = (r: Report): boolean => {
+    if (isStaff) return true
+    if (!isLead || r.status !== 'pending') return false
+    return r.authorId === viewerId || (r.atelierId != null && myAtelierIds.includes(r.atelierId))
+  }
+
+  // Visibility:
+  //  - admin: everything (incl. pending, to validate)
+  //  - lead: validated reports in scope + their atelier's reports (incl. pending)
+  //  - travailleur: only validated reports in scope
+  const visibleReports = reports.filter((r) => {
+    if (isStaff) return true
+    const mine = r.authorId === viewerId || (r.atelierId != null && myAtelierIds.includes(r.atelierId))
+    if (isLead && mine) return true
+    return r.status === 'validated' && isPersonInScope(r, viewerId, groups, ateliers)
+  })
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
@@ -27,11 +54,32 @@ export default function ComptesRendus() {
   /* ---------- Editor ---------- */
   if (editingId !== null) {
     const initial = editingId === 'new' ? null : reports.find((r) => r.id === editingId) ?? null
+
+    // Leads use a simplified editor scoped to their ateliers; reports they save
+    // are 'pending' until an admin validates them.
+    if (isLead && !isStaff) {
+      return (
+        <LeadReportEditor
+          initial={initial}
+          ateliers={myAteliers}
+          authorId={viewerId}
+          onCancel={() => setEditingId(null)}
+          onSave={(data) => {
+            if (editingId === 'new') addReport(data)
+            else updateReport(editingId, data)
+            setEditingId(null)
+            setSelectedId(null)
+          }}
+        />
+      )
+    }
+
     return (
       <ReportEditor
         initial={initial}
         groups={groups}
         people={people}
+        ateliers={ateliers}
         onCancel={() => setEditingId(null)}
         onSave={(data) => {
           if (editingId === 'new') addReport(data)
@@ -53,17 +101,37 @@ export default function ComptesRendus() {
           <button onClick={() => setSelectedId(null)} style={backBtn}>
             <i className="ti ti-arrow-left" style={{ fontSize: 22 }} /> Retour à la liste
           </button>
-          {isStaff && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setEditingId(r.id)} style={ghostBtn(C.blue)}>
-                <i className="ti ti-edit" style={{ fontSize: 18 }} /> Modifier
+          <div style={{ display: 'flex', gap: 8 }}>
+            {isStaff && r.status === 'pending' && (
+              <button onClick={() => validateReport(r.id)} style={{ ...ghostBtn(C.green), background: C.green, color: '#fff', borderColor: C.green }}>
+                <i className="ti ti-circle-check" style={{ fontSize: 18 }} /> Valider
               </button>
-              <button onClick={() => setConfirmDelete(r)} style={ghostBtn('#dc2626')}>
-                <i className="ti ti-trash" style={{ fontSize: 18 }} /> Supprimer
-              </button>
-            </div>
-          )}
+            )}
+            {canEditReport(r) && (
+              <>
+                <button onClick={() => setEditingId(r.id)} style={ghostBtn(C.blue)}>
+                  <i className="ti ti-edit" style={{ fontSize: 18 }} /> Modifier
+                </button>
+                <button onClick={() => setConfirmDelete(r)} style={ghostBtn('#dc2626')}>
+                  <i className="ti ti-trash" style={{ fontSize: 18 }} /> Supprimer
+                </button>
+              </>
+            )}
+          </div>
         </div>
+
+        {r.status === 'pending' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
+            background: '#FEF3C7', border: '1px solid #FCD34D', color: '#92400E',
+            borderRadius: 12, padding: '12px 16px', fontSize: 15, fontWeight: 600,
+          }}>
+            <i className="ti ti-clock-hour-4" style={{ fontSize: 20 }} />
+            {isStaff
+              ? 'Ce compte rendu attend votre validation. Il n’est pas encore visible des travailleurs.'
+              : 'En attente de validation par un administrateur. Les travailleurs ne le voient pas encore.'}
+          </div>
+        )}
 
         <div style={{
           display: 'inline-block', fontSize: 12, fontWeight: 700, color: '#fff',
@@ -79,8 +147,9 @@ export default function ComptesRendus() {
         {isStaff && (
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 24, fontSize: 14, color: C.sub }}>
             <i className="ti ti-eye" style={{ fontSize: 18 }} /> Visible par :
-            {r.groupIds.length === 0 && r.personIds.length === 0 && <span style={{ fontStyle: 'italic' }}>personne pour l&apos;instant</span>}
-            {r.groupIds.map((gid) => {
+            {r.audienceAll && <span style={{ background: C.primary, color: '#fff', borderRadius: 999, padding: '3px 10px', fontWeight: 600 }}>Tout le monde</span>}
+            {!r.audienceAll && r.groupIds.length === 0 && r.personIds.length === 0 && <span style={{ fontStyle: 'italic' }}>personne pour l&apos;instant</span>}
+            {!r.audienceAll && r.groupIds.map((gid) => {
               const g = groups.find((x) => x.id === gid)
               if (!g) return null
               return (
@@ -89,7 +158,7 @@ export default function ComptesRendus() {
                 </span>
               )
             })}
-            {r.personIds.length > 0 && (
+            {!r.audienceAll && r.personIds.length > 0 && (
               <span style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: 999, padding: '3px 10px', fontWeight: 600 }}>
                 +{r.personIds.length} personne(s)
               </span>
@@ -140,6 +209,8 @@ export default function ComptesRendus() {
           </>
         )}
 
+        <AttachmentsView attachments={r.attachments} />
+
         {confirmDelete && (
           <DeleteDialog
             report={confirmDelete}
@@ -160,12 +231,14 @@ export default function ComptesRendus() {
           title="Comptes rendus"
           text="Lisez ce qui a été dit et décidé lors des réunions. Cliquez sur un compte rendu pour le lire."
         />
-        {isStaff && (
+        {canCompose && (
           <button onClick={() => setEditingId('new')} style={primaryBtn}>
             <i className="ti ti-plus" style={{ fontSize: 20 }} /> Nouveau compte rendu
           </button>
         )}
       </div>
+
+      {isLead && <LeadAteliersBar myAteliers={myAteliers} />}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {visibleReports.length === 0 && (
@@ -193,20 +266,34 @@ export default function ComptesRendus() {
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: TYPE_COLORS[r.type], padding: '2px 8px', borderRadius: 999 }}>
                     {r.type}
                   </span>
+                  {r.status === 'pending' && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#92400E', background: '#FEF3C7', border: '1px solid #FCD34D', padding: '2px 8px', borderRadius: 999 }}>
+                      <i className="ti ti-clock-hour-4" style={{ fontSize: 13 }} /> En attente
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 600, color: C.ink }}>{r.title}</div>
                 <div style={{ fontSize: 15, color: C.sub }}>{r.date}</div>
               </div>
             </button>
 
-            {isStaff ? (
+            {(isStaff || canEditReport(r)) ? (
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                <button onClick={() => setEditingId(r.id)} aria-label="Modifier" style={iconBtn(C.blue)}>
-                  <i className="ti ti-edit" style={{ fontSize: 19 }} />
-                </button>
-                <button onClick={() => setConfirmDelete(r)} aria-label="Supprimer" style={iconBtn('#dc2626')}>
-                  <i className="ti ti-trash" style={{ fontSize: 19 }} />
-                </button>
+                {isStaff && r.status === 'pending' && (
+                  <button onClick={() => validateReport(r.id)} aria-label="Valider" title="Valider" style={{ ...iconBtn(C.green), background: C.green, color: '#fff', borderColor: C.green }}>
+                    <i className="ti ti-check" style={{ fontSize: 19 }} />
+                  </button>
+                )}
+                {canEditReport(r) && (
+                  <>
+                    <button onClick={() => setEditingId(r.id)} aria-label="Modifier" style={iconBtn(C.blue)}>
+                      <i className="ti ti-edit" style={{ fontSize: 19 }} />
+                    </button>
+                    <button onClick={() => setConfirmDelete(r)} aria-label="Supprimer" style={iconBtn('#dc2626')}>
+                      <i className="ti ti-trash" style={{ fontSize: 19 }} />
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <i className="ti ti-chevron-right" style={{ fontSize: 26, color: C.sub, flexShrink: 0 }} />
@@ -229,11 +316,12 @@ export default function ComptesRendus() {
 /* ---------- Editor ---------- */
 
 function ReportEditor({
-  initial, groups, people, onSave, onCancel,
+  initial, groups, people, ateliers, onSave, onCancel,
 }: {
   initial: Report | null
   groups: Group[]
   people: Person[]
+  ateliers: Atelier[]
   onSave: (data: Omit<Report, 'id'>) => void
   onCancel: () => void
 }) {
@@ -246,6 +334,8 @@ function ReportEditor({
   // New report is visible to everyone by default (all groups)
   const [groupIds, setGroupIds] = useState<string[]>(initial?.groupIds ?? groups.map((g) => g.id))
   const [personIds, setPersonIds] = useState<string[]>(initial?.personIds ?? [])
+  const [audienceAll, setAudienceAll] = useState<boolean>(initial?.audienceAll ?? false)
+  const [attachments, setAttachments] = useState<ReportAttachment[]>(initial?.attachments ?? [])
   const [showPeople, setShowPeople] = useState(false)
   const [error, setError] = useState('')
 
@@ -254,10 +344,17 @@ function ReportEditor({
   const togglePerson = (id: string) =>
     setPersonIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
 
-  // People reached (direct + via groups), for the count
-  const reached = people.filter(
-    (p) => personIds.includes(p.id) || groupIds.some((gid) => groups.find((g) => g.id === gid)?.memberIds.includes(p.id))
-  ).length
+  // People reached (direct + via groups, expanding the groups' ateliers)
+  const reached = audienceAll
+    ? people.length
+    : people.filter(
+        (p) =>
+          personIds.includes(p.id) ||
+          groupIds.some((gid) => {
+            const g = groups.find((x) => x.id === gid)
+            return g ? groupPersonIds(g, ateliers).includes(p.id) : false
+          })
+      ).length
 
   const save = () => {
     if (!title.trim()) { setError('Le titre est obligatoire.'); return }
@@ -270,6 +367,12 @@ function ReportEditor({
       actions: actions.map((a) => ({ ...a, text: a.text.trim() })).filter((a) => a.text),
       groupIds,
       personIds,
+      audienceAll,
+      attachments,
+      // Admin reports are published directly; existing fields are preserved.
+      status: initial?.status ?? 'validated',
+      authorId: initial?.authorId,
+      atelierId: initial?.atelierId,
     })
   }
 
@@ -389,6 +492,26 @@ function ReportEditor({
         {/* Audience — who can read this report */}
         <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 18 }}>
           <Labeled label="Qui peut voir ce compte rendu ?">
+            {/* "Tout le monde" — overrides the group/person selection */}
+            <button
+              onClick={() => setAudienceAll((v) => !v)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 999,
+                cursor: 'pointer', fontSize: 15, fontWeight: 700, marginBottom: 12,
+                border: `1px solid ${audienceAll ? C.primary : C.line}`,
+                background: audienceAll ? C.primary : '#fff', color: audienceAll ? '#fff' : C.ink,
+              }}
+            >
+              <i className={`ti ${audienceAll ? 'ti-check' : 'ti-world'}`} style={{ fontSize: 18 }} />
+              Tout le monde
+            </button>
+
+            {audienceAll ? (
+              <div style={{ fontSize: 15, color: C.sub, lineHeight: 1.5 }}>
+                Ce compte rendu sera visible par <strong style={{ color: C.ink }}>tous les travailleurs</strong>.
+              </div>
+            ) : (
+            <>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {groups.map((g) => {
                 const on = groupIds.includes(g.id)
@@ -440,11 +563,19 @@ function ReportEditor({
                 })}
               </div>
             )}
+            </>
+            )}
 
             <div style={{ marginTop: 10, fontSize: 14, color: C.primary, fontWeight: 600 }}>
               <i className="ti ti-eye" style={{ verticalAlign: '-2px', marginRight: 6 }} />
               {reached} personne(s) peuvent le voir
             </div>
+          </Labeled>
+        </div>
+
+        <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 18 }}>
+          <Labeled label="Documents joints">
+            <AttachmentsField attachments={attachments} onChange={setAttachments} />
           </Labeled>
         </div>
 
@@ -500,6 +631,332 @@ function DeleteDialog({ report, onConfirm, onCancel }: { report: Report; onConfi
         </div>
       </div>
     </div>
+  )
+}
+
+/* ---------- Lead (chef d'atelier) editor ---------- */
+
+function LeadReportEditor({
+  initial, ateliers, authorId, onSave, onCancel,
+}: {
+  initial: Report | null
+  ateliers: Atelier[]
+  authorId: string
+  onSave: (data: Omit<Report, 'id'>) => void
+  onCancel: () => void
+}) {
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [date, setDate] = useState(initial?.date ?? '')
+  const [atelierId, setAtelierId] = useState<string>(initial?.atelierId ?? ateliers[0]?.id ?? '')
+  const [summary, setSummary] = useState(initial?.summary ?? '')
+  const [decisions, setDecisions] = useState<string[]>(initial?.decisions ?? [''])
+  const [actions, setActions] = useState<ReportAction[]>(initial?.actions ?? [])
+  const [attachments, setAttachments] = useState<ReportAttachment[]>(initial?.attachments ?? [])
+  const [error, setError] = useState('')
+
+  const atelier = ateliers.find((a) => a.id === atelierId)
+
+  const save = () => {
+    if (!title.trim()) { setError('Le titre est obligatoire.'); return }
+    if (!atelier) { setError('Choisissez un atelier.'); return }
+    onSave({
+      title: title.trim(),
+      date: date.trim() || 'Date à préciser',
+      type: 'Atelier',
+      summary: summary.trim(),
+      decisions: decisions.map((d) => d.trim()).filter(Boolean),
+      actions: actions.map((a) => ({ ...a, text: a.text.trim() })).filter((a) => a.text),
+      // Audience = members of the atelier this report is about.
+      groupIds: [],
+      personIds: atelier.memberIds,
+      attachments,
+      status: 'pending',
+      authorId: initial?.authorId ?? authorId,
+      atelierId,
+    })
+  }
+
+  const field: React.CSSProperties = {
+    width: '100%', padding: '12px 14px', fontSize: 16, borderRadius: 10,
+    border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+  }
+
+  return (
+    <div style={{ maxWidth: 760 }}>
+      <button onClick={onCancel} style={{ ...backBtn, marginBottom: 18 }}>
+        <i className="ti ti-arrow-left" style={{ fontSize: 22 }} /> Annuler
+      </button>
+
+      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, color: C.ink, margin: '0 0 8px' }}>
+        {initial ? 'Modifier le compte rendu' : 'Nouveau compte rendu'}
+      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, color: '#92400E', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 10, padding: '10px 14px', fontSize: 14, fontWeight: 600 }}>
+        <i className="ti ti-info-circle" style={{ fontSize: 18 }} />
+        Votre compte rendu sera envoyé en validation à un administrateur avant d&apos;être visible.
+      </div>
+
+      <Card style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <Labeled label="Atelier concerné">
+          <select
+            value={atelierId}
+            onChange={(e) => { setAtelierId(e.target.value); setError('') }}
+            style={{ ...field, fontWeight: 600, cursor: 'pointer', background: '#fff' }}
+          >
+            {ateliers.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          {atelier && (
+            <div style={{ marginTop: 8, fontSize: 14, color: C.primary, fontWeight: 600 }}>
+              <i className="ti ti-eye" style={{ verticalAlign: '-2px', marginRight: 6 }} />
+              Visible par les {atelier.memberIds.length} membre(s) de l&apos;atelier
+            </div>
+          )}
+        </Labeled>
+
+        <Labeled label="Titre">
+          <input value={title} onChange={(e) => { setTitle(e.target.value); setError('') }} placeholder="Ex : Réunion d'atelier du 20 juin" style={field} />
+        </Labeled>
+
+        <Labeled label="Date">
+          <input value={date} onChange={(e) => setDate(e.target.value)} placeholder="Ex : 20 juin 2026" style={field} />
+        </Labeled>
+
+        <Labeled label="Résumé (en mots simples)">
+          <textarea
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            rows={3}
+            placeholder="Ce dont on a parlé, expliqué simplement."
+            style={{ ...field, resize: 'vertical', lineHeight: 1.5 }}
+          />
+        </Labeled>
+
+        <Labeled label="Décisions prises">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {decisions.map((d, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <i className="ti ti-point-filled" style={{ fontSize: 20, color: C.primary, flexShrink: 0 }} />
+                <input
+                  value={d}
+                  onChange={(e) => setDecisions(decisions.map((x, j) => (j === i ? e.target.value : x)))}
+                  placeholder="Une décision…"
+                  style={field}
+                />
+                <button onClick={() => setDecisions(decisions.filter((_, j) => j !== i))} aria-label="Retirer" style={iconBtn('#dc2626')}>
+                  <i className="ti ti-x" style={{ fontSize: 18 }} />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => setDecisions([...decisions, ''])} style={addRowBtn}>
+              <i className="ti ti-plus" style={{ fontSize: 18 }} /> Ajouter une décision
+            </button>
+          </div>
+        </Labeled>
+
+        <Labeled label="Suivi des actions">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {actions.map((a, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  onClick={() => setActions(actions.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))}
+                  aria-label={a.done ? 'Marquer en cours' : 'Marquer fait'}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', flexShrink: 0, padding: 0 }}
+                >
+                  <i className={`ti ${a.done ? 'ti-circle-check-filled' : 'ti-circle-dashed'}`} style={{ fontSize: 24, color: a.done ? C.green : C.sub }} />
+                </button>
+                <input
+                  value={a.text}
+                  onChange={(e) => setActions(actions.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                  placeholder="Une action à suivre…"
+                  style={field}
+                />
+                <button onClick={() => setActions(actions.filter((_, j) => j !== i))} aria-label="Retirer" style={iconBtn('#dc2626')}>
+                  <i className="ti ti-x" style={{ fontSize: 18 }} />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => setActions([...actions, { text: '', done: false }])} style={addRowBtn}>
+              <i className="ti ti-plus" style={{ fontSize: 18 }} /> Ajouter une action
+            </button>
+          </div>
+        </Labeled>
+
+        <Labeled label="Documents joints">
+          <AttachmentsField attachments={attachments} onChange={setAttachments} />
+        </Labeled>
+
+        {error && <div style={{ color: '#dc2626', fontSize: 15, fontWeight: 600 }}>{error}</div>}
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={save} style={{ ...primaryBtn, flex: 1, justifyContent: 'center' }}>
+            <i className="ti ti-send" style={{ fontSize: 20 }} /> Envoyer en validation
+          </button>
+          <button onClick={onCancel} style={{ ...ghostBtn(C.sub), padding: '13px 20px' }}>
+            Annuler
+          </button>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+/* ---------- Lead's ateliers overview (read-only) ---------- */
+/* Ateliers are defined by admins only; a chef/suppléant just sees which ones
+ * they may write reports for. */
+
+function LeadAteliersBar({ myAteliers }: { myAteliers: Atelier[] }) {
+  return (
+    <Card style={{ marginBottom: 18, background: C.bg }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <i className="ti ti-tools" style={{ fontSize: 22, color: C.primary }} />
+        <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>Mes ateliers :</span>
+        {myAteliers.map((a) => (
+          <span key={a.id} style={{ fontSize: 14, fontWeight: 600, color: C.primaryDark, background: C.light, borderRadius: 999, padding: '4px 12px' }}>
+            {a.name}
+          </span>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+/* ---------- Attachments (PDF / images / Word) ---------- */
+
+const ACCEPT = '.pdf,.png,.jpg,.jpeg,.doc,.docx,application/pdf,image/png,image/jpeg,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+const MAX_FILE_MB = 10
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+function isImage(type: string): boolean {
+  return type.startsWith('image/')
+}
+
+function fileIcon(type: string): string {
+  if (isImage(type)) return 'ti-photo'
+  if (type === 'application/pdf') return 'ti-file-type-pdf'
+  if (type.includes('word') || type === 'application/msword') return 'ti-file-type-docx'
+  return 'ti-file'
+}
+
+/** Editor field: pick files and manage the attachment list. */
+function AttachmentsField({
+  attachments, onChange,
+}: {
+  attachments: ReportAttachment[]
+  onChange: (next: ReportAttachment[]) => void
+}) {
+  const persist = useAppStore((s) => s.persist)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const onPick = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setError('')
+    setBusy(true)
+    try {
+      const added: ReportAttachment[] = []
+      for (const file of Array.from(files)) {
+        if (file.size > MAX_FILE_MB * 1024 * 1024) {
+          setError(`« ${file.name} » dépasse ${MAX_FILE_MB} Mo et n'a pas été ajouté.`)
+          continue
+        }
+        const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+        if (persist) {
+          // Upload to Supabase Storage; store only the public URL.
+          const fd = new FormData()
+          fd.append('file', file)
+          const uploaded = await uploadAttachment(fd)
+          if (uploaded) {
+            added.push({ id, name: uploaded.name, type: uploaded.type, dataUrl: uploaded.url })
+            continue
+          }
+        }
+        // Demo mode (or upload unavailable): keep the file inline as base64.
+        const dataUrl = await readFileAsDataUrl(file)
+        added.push({ id, name: file.name, type: file.type, dataUrl })
+      }
+      if (added.length) onChange([...attachments, ...added])
+    } catch (e) {
+      console.error('[attachments] upload failed', e)
+      setError("L'envoi du fichier a échoué. Réessayez.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      {attachments.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+          {attachments.map((a) => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, border: `1px solid ${C.line}`, background: '#fff' }}>
+              {isImage(a.type) ? (
+                <img src={a.dataUrl} alt="" style={{ width: 38, height: 38, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
+                <i className={`ti ${fileIcon(a.type)}`} style={{ fontSize: 30, color: C.primary, flexShrink: 0 }} />
+              )}
+              <span style={{ flex: 1, minWidth: 0, fontSize: 15, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+              <button
+                onClick={() => onChange(attachments.filter((x) => x.id !== a.id))}
+                aria-label={`Retirer ${a.name}`}
+                style={iconBtn('#dc2626')}
+              >
+                <i className="ti ti-x" style={{ fontSize: 18 }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <label style={{ ...addRowBtn, cursor: busy ? 'wait' : 'pointer', display: 'inline-flex', opacity: busy ? 0.7 : 1 }}>
+        <i className={`ti ${busy ? 'ti-loader-2' : 'ti-paperclip'}`} style={{ fontSize: 18 }} />
+        {busy ? 'Envoi…' : 'Ajouter un fichier'}
+        <input type="file" accept={ACCEPT} multiple disabled={busy} onChange={(e) => { onPick(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+      </label>
+      <div style={{ marginTop: 6, fontSize: 13, color: C.sub }}>PDF, image (PNG/JPG) ou Word — {MAX_FILE_MB} Mo max.</div>
+      {error && <div style={{ marginTop: 6, color: '#dc2626', fontSize: 14, fontWeight: 600 }}>{error}</div>}
+    </div>
+  )
+}
+
+/** Read-only display in the report detail. */
+function AttachmentsView({ attachments }: { attachments: ReportAttachment[] }) {
+  if (attachments.length === 0) return null
+  return (
+    <>
+      <h3 style={{ fontSize: 19, fontWeight: 600, color: C.ink, margin: '0 0 12px' }}>Documents joints</h3>
+      <Card style={{ marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {attachments.map((a) => (
+          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {isImage(a.type) ? (
+              <a href={a.dataUrl} target="_blank" rel="noreferrer" style={{ flexShrink: 0 }}>
+                <img src={a.dataUrl} alt={a.name} style={{ width: 54, height: 54, borderRadius: 10, objectFit: 'cover', border: `1px solid ${C.line}` }} />
+              </a>
+            ) : (
+              <div style={{ width: 54, height: 54, borderRadius: 10, background: C.light, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <i className={`ti ${fileIcon(a.type)}`} style={{ fontSize: 30, color: C.primary }} />
+              </div>
+            )}
+            <span style={{ flex: 1, minWidth: 0, fontSize: 16, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+            <a
+              href={a.dataUrl}
+              download={a.name}
+              style={{ ...ghostBtn(C.blue), textDecoration: 'none' }}
+            >
+              <i className="ti ti-download" style={{ fontSize: 18 }} /> Télécharger
+            </a>
+          </div>
+        ))}
+      </Card>
+    </>
   )
 }
 

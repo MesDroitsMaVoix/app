@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import {
-  useAppStore, isPersonInEvent, CURRENT_USER_ID, canManage,
-  AgendaEvent, EventType,
+  useAppStore, isPersonInEvent, ateliersLedBy, CURRENT_USER_ID, canManage,
+  AgendaEvent, EventType, Atelier,
 } from '@/store/useAppStore'
 import { C, Card } from '@/components/ui'
 
@@ -23,11 +23,18 @@ const iso = (y: number, m: number, d: number) =>
   `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 
 export default function Agenda() {
-  const { role, events, groups, people, accounts, currentAccountId, addEvent, deleteEvent, toggleEventGroup } = useAppStore()
+  const { role, events, groups, ateliers, people, accounts, currentAccountId, addEvent, deleteEvent, toggleEventGroup } = useAppStore()
   const isStaff = canManage(role)
 
   // The person whose agenda a travailleur sees (their linked directory id)
   const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? CURRENT_USER_ID
+
+  // A chef/suppléant may add meetings for their own ateliers.
+  const myAteliers = ateliersLedBy(viewerId, ateliers)
+  const isLead = !isStaff && myAteliers.length > 0
+  const canCreate = isStaff || isLead
+  const canDeleteEvent = (e: AgendaEvent): boolean =>
+    isStaff || (isLead && e.authorId === viewerId)
 
   const [view, setView] = useState({ year: 2026, month: 5 })
   const [selected, setSelected] = useState<string>(TODAY)
@@ -36,7 +43,7 @@ export default function Agenda() {
   // Travailleur only sees events assigned to them
   const visibleEvents = isStaff
     ? events
-    : events.filter((e) => isPersonInEvent(e, viewerId, groups))
+    : events.filter((e) => isPersonInEvent(e, viewerId, groups, ateliers))
 
   const { year, month } = view
   const startOffset = (new Date(year, month, 1).getDay() + 6) % 7
@@ -62,7 +69,7 @@ export default function Agenda() {
 
   // How many people are reached by an event (direct + via groups)
   const reachCount = (e: AgendaEvent) =>
-    people.filter((p) => isPersonInEvent(e, p.id, groups)).length
+    people.filter((p) => isPersonInEvent(e, p.id, groups, ateliers)).length
 
   return (
     <div style={{ display: 'flex', gap: 22, height: '100%', alignItems: 'stretch' }}>
@@ -153,8 +160,8 @@ export default function Agenda() {
           </h3>
         </div>
 
-        {/* Accompagnateur: add a meeting */}
-        {isStaff && !showForm && (
+        {/* Admin or chef d'atelier: add a meeting */}
+        {canCreate && !showForm && (
           <button
             onClick={() => setShowForm(true)}
             style={{
@@ -163,13 +170,16 @@ export default function Agenda() {
               padding: 14, fontSize: 16, fontWeight: 600, cursor: 'pointer',
             }}
           >
-            <i className="ti ti-calendar-plus" style={{ fontSize: 22 }} /> Nouvelle réunion
+            <i className="ti ti-calendar-plus" style={{ fontSize: 22 }} />
+            {isStaff ? 'Nouvelle réunion' : 'Réunion de mon atelier'}
           </button>
         )}
 
-        {isStaff && showForm && (
+        {canCreate && showForm && (
           <EventForm
             date={selected}
+            authorId={viewerId}
+            leadAteliers={isStaff ? undefined : myAteliers}
             onCancel={() => setShowForm(false)}
             onCreate={(e) => { addEvent(e); setShowForm(false) }}
           />
@@ -193,7 +203,7 @@ export default function Agenda() {
                 }}>
                   {e.type}
                 </div>
-                {isStaff && (
+                {canDeleteEvent(e) && (
                   <button
                     onClick={() => deleteEvent(e.id)}
                     aria-label="Supprimer la réunion"
@@ -269,25 +279,41 @@ export default function Agenda() {
 /* ---------- New-event form ---------- */
 
 function EventForm({
-  date, onCreate, onCancel,
+  date, onCreate, onCancel, authorId, leadAteliers,
 }: {
   date: string
   onCreate: (e: Omit<AgendaEvent, 'id'>) => void
   onCancel: () => void
+  authorId: string
+  /** When set, the form is scoped to a chef/suppléant's own ateliers. */
+  leadAteliers?: Atelier[]
 }) {
   const groups = useAppStore((s) => s.groups)
+  const ateliers = useAppStore((s) => s.ateliers)
+  const isLead = leadAteliers !== undefined
+
   const [title, setTitle] = useState('')
   const [time, setTime] = useState('14h00')
   const [place, setPlace] = useState('')
-  const [type, setType] = useState<EventType>('CVS')
+  const [type, setType] = useState<EventType>(isLead ? 'Atelier' : 'CVS')
   const [groupIds, setGroupIds] = useState<string[]>([])
+  const [atelierId, setAtelierId] = useState<string>(leadAteliers?.[0]?.id ?? '')
 
   const toggle = (id: string) =>
     setGroupIds((g) => (g.includes(id) ? g.filter((x) => x !== id) : [...g, id]))
 
   const submit = () => {
     if (!title.trim()) return
-    onCreate({ date, time, place: place.trim() || 'À définir', title: title.trim(), type, personIds: [], groupIds })
+    if (isLead) {
+      const atelier = ateliers.find((a) => a.id === atelierId)
+      if (!atelier) return
+      onCreate({
+        date, time, place: place.trim() || atelier.name, title: title.trim(),
+        type: 'Atelier', personIds: atelier.memberIds, groupIds: [], authorId,
+      })
+    } else {
+      onCreate({ date, time, place: place.trim() || 'À définir', title: title.trim(), type, personIds: [], groupIds, authorId })
+    }
   }
 
   const field: React.CSSProperties = {
@@ -295,9 +321,13 @@ function EventForm({
     border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
   }
 
+  const selectedAtelier = leadAteliers?.find((a) => a.id === atelierId)
+
   return (
     <Card style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, border: `2px solid ${C.primary}` }}>
-      <div style={{ fontSize: 17, fontWeight: 600, color: C.ink }}>Nouvelle réunion · {date.split('-').reverse().join('/')}</div>
+      <div style={{ fontSize: 17, fontWeight: 600, color: C.ink }}>
+        {isLead ? 'Réunion de mon atelier' : 'Nouvelle réunion'} · {date.split('-').reverse().join('/')}
+      </div>
 
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre de la réunion" aria-label="Titre" style={field} />
 
@@ -306,45 +336,69 @@ function EventForm({
         <input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Lieu" aria-label="Lieu" style={field} />
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {TYPES.map((t) => (
-          <button
-            key={t}
-            onClick={() => setType(t)}
-            style={{
-              padding: '7px 13px', borderRadius: 999, cursor: 'pointer', fontSize: 14, fontWeight: 600,
-              border: `1px solid ${type === t ? TYPE_COLORS[t] : C.line}`,
-              background: type === t ? TYPE_COLORS[t] : '#fff', color: type === t ? '#fff' : C.ink,
-            }}
+      {isLead ? (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, margin: '2px 0 8px', textTransform: 'uppercase' }}>Atelier concerné</div>
+          <select
+            value={atelierId}
+            onChange={(e) => setAtelierId(e.target.value)}
+            aria-label="Atelier concerné"
+            style={{ ...field, fontWeight: 600, cursor: 'pointer', background: '#fff' }}
           >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, margin: '2px 0 8px', textTransform: 'uppercase' }}>Qui est concerné ?</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {groups.map((g) => {
-            const on = groupIds.includes(g.id)
-            return (
+            {leadAteliers!.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          {selectedAtelier && (
+            <div style={{ marginTop: 8, fontSize: 14, color: C.primary, fontWeight: 600 }}>
+              <i className="ti ti-users" style={{ verticalAlign: '-2px', marginRight: 6 }} />
+              {selectedAtelier.memberIds.length} membre(s) prévenu(s)
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {TYPES.map((t) => (
               <button
-                key={g.id}
-                onClick={() => toggle(g.id)}
+                key={t}
+                onClick={() => setType(t)}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999,
-                  cursor: 'pointer', fontSize: 14, fontWeight: 600,
-                  border: `1px solid ${on ? C.primary : C.line}`,
-                  background: on ? C.primary : '#fff', color: on ? '#fff' : C.ink,
+                  padding: '7px 13px', borderRadius: 999, cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                  border: `1px solid ${type === t ? TYPE_COLORS[t] : C.line}`,
+                  background: type === t ? TYPE_COLORS[t] : '#fff', color: type === t ? '#fff' : C.ink,
                 }}
               >
-                <i className={`ti ${on ? 'ti-check' : 'ti-plus'}`} style={{ fontSize: 16 }} />
-                {g.name}
+                {t}
               </button>
-            )
-          })}
-        </div>
-      </div>
+            ))}
+          </div>
+
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, margin: '2px 0 8px', textTransform: 'uppercase' }}>Qui est concerné ?</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {groups.map((g) => {
+                const on = groupIds.includes(g.id)
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => toggle(g.id)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999,
+                      cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                      border: `1px solid ${on ? C.primary : C.line}`,
+                      background: on ? C.primary : '#fff', color: on ? '#fff' : C.ink,
+                    }}
+                  >
+                    <i className={`ti ${on ? 'ti-check' : 'ti-plus'}`} style={{ fontSize: 16 }} />
+                    {g.name}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <button

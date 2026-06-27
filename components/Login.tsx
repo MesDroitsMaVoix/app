@@ -5,9 +5,8 @@ import { useAppStore } from '@/store/useAppStore'
 import { C } from '@/components/ui'
 
 const ROLE_LABEL = {
+  admin: 'Administrateur',
   travailleur: 'Travailleur',
-  representant: 'Représentant',
-  accompagnateur: 'Accompagnateur',
 } as const
 
 type Phase = 'enter' | 'create' | 'confirm'

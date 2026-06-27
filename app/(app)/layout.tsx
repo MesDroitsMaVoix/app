@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import Sidebar from '@/components/Sidebar'
 import Topbar from '@/components/Topbar'
 import Login from '@/components/Login'
@@ -7,6 +8,28 @@ import { useAppStore } from '@/store/useAppStore'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const currentAccountId = useAppStore((s) => s.currentAccountId)
+  const loading = useAppStore((s) => s.loading)
+  const hydrate = useAppStore((s) => s.hydrate)
+
+  // Load data from the database once, on first mount.
+  useEffect(() => {
+    hydrate()
+  }, [hydrate])
+
+  if (loading) {
+    return (
+      <div style={{
+        height: '100vh', width: '100vw',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: '#F8FAFC', color: '#64748B', fontSize: 16, fontWeight: 600,
+        fontFamily: 'var(--font-main, sans-serif)',
+      }}>
+        <i className="ti ti-loader-2" style={{ fontSize: 28, marginRight: 12, animation: 'spin 1s linear infinite' }} />
+        Chargement…
+        <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
+      </div>
+    )
+  }
 
   if (!currentAccountId) {
     return <Login />
