@@ -50,7 +50,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       display: 'flex',
-      height: '100vh',
+      height: '100dvh',
       width: '100vw',
       overflow: 'hidden',
       background: '#fff',
@@ -60,15 +60,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Topbar />
         <main style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           padding: isMobile ? '16px' : '32px',
-          paddingBottom: isMobile ? 'calc(72px + env(safe-area-inset-bottom))' : undefined,
           background: '#F8FAFC',
         }}>
           {children}
         </main>
+        {/* Bottom nav lives in the flex column (not fixed) so it always reserves
+         * its own space and never covers page content. */}
+        {isMobile && <BottomNav />}
       </div>
-      {isMobile && <BottomNav />}
     </div>
   )
 }

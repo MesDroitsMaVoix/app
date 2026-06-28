@@ -1,8 +1,8 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useAppStore, canManage } from '@/store/useAppStore'
-import { C } from '@/components/ui'
+import { C, Avatar } from '@/components/ui'
 import { useIsMobile } from '@/lib/useIsMobile'
 
 const PAGE_TITLES = {
@@ -30,17 +30,24 @@ function timeAgo(ts: number): string {
 export default function Topbar() {
   const {
     activePage, role, notifOpen, logout, toggleNotif, setPage,
-    notifications, accounts, currentAccountId, markNotificationsRead, clearNotifications, setConversation,
+    notifications, accounts, currentAccountId, people, markNotificationsRead, clearNotifications, setConversation,
   } = useAppStore()
   const isMobile = useIsMobile()
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const roleLabel = role === 'admin' ? 'Administrateur' : 'Travailleur'
   const title =
     activePage === 'representants' && canManage(role)
       ? 'Gestion du personnel'
       : PAGE_TITLES[activePage]
 
+  // Current account (for the mobile account menu).
+  const me = accounts.find((a) => a.id === currentAccountId)
+  const myName = me?.name ?? ''
+  const myInitials = me?.initials ?? '?'
+
   // Notifications addressed to the current user, most recent first.
-  const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? ''
+  const viewerId = me?.personId ?? ''
+  const myPhoto = people.find((p) => p.id === viewerId)?.photoUrl
   const myNotifications = notifications
     .filter((n) => n.recipientIds.includes(viewerId) && !(n.dismissedBy ?? []).includes(viewerId))
     .sort((a, b) => b.createdAt - a.createdAt)
@@ -71,19 +78,29 @@ export default function Topbar() {
       position: 'relative',
       minHeight: '68px',
     }}>
-      <h1 style={{
-        fontFamily: 'var(--font-display)',
-        fontSize: isMobile ? '19px' : '22px',
-        fontWeight: 600,
-        color: C.ink,
-        margin: 0,
-        minWidth: 0,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-      }}>
-        {title}
-      </h1>
+      {isMobile ? (
+        /* On mobile the title is shown by the page itself + the bottom nav,
+         * so the header carries the brand instead (logo + name). */
+        <img
+          src="/logo_portevoix_horizontal.svg"
+          alt="Mes Droits, Ma Voix"
+          style={{ height: 38, width: 'auto', flexShrink: 1, minWidth: 0, objectFit: 'contain' }}
+        />
+      ) : (
+        <h1 style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: '22px',
+          fontWeight: 600,
+          color: C.ink,
+          margin: 0,
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {title}
+        </h1>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         {/* Notif */}
@@ -178,44 +195,108 @@ export default function Topbar() {
           </span>
         )}
 
-        {/* Settings */}
-        <button
-          onClick={() => setPage('parametres')}
-          aria-label="Paramètres"
-          title="Paramètres"
-          style={{
-            width: '40px', height: '40px', borderRadius: '10px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: activePage === 'parametres' ? C.light : C.bg,
-            border: `1px solid ${activePage === 'parametres' ? C.primary : C.line}`,
-            color: activePage === 'parametres' ? C.primaryDark : C.sub,
-            fontSize: '20px', cursor: 'pointer',
-          }}
-        >
-          <i className="ti ti-settings" />
-        </button>
+        {/* Desktop: settings + labelled logout */}
+        {!isMobile && (
+          <>
+            <button
+              onClick={() => setPage('parametres')}
+              aria-label="Paramètres"
+              title="Paramètres"
+              style={{
+                width: '40px', height: '40px', borderRadius: '10px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: activePage === 'parametres' ? C.light : C.bg,
+                border: `1px solid ${activePage === 'parametres' ? C.primary : C.line}`,
+                color: activePage === 'parametres' ? C.primaryDark : C.sub,
+                fontSize: '20px', cursor: 'pointer',
+              }}
+            >
+              <i className="ti ti-settings" />
+            </button>
 
-        {/* Logout — icon-only on mobile, labelled on desktop */}
-        <button
-          onClick={logout}
-          title="Se déconnecter"
-          aria-label="Se déconnecter"
-          style={isMobile ? {
-            width: '40px', height: '40px', borderRadius: '10px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: C.bg, border: `1px solid ${C.line}`,
-            color: C.sub, fontSize: '20px', cursor: 'pointer',
-          } : {
-            display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '8px 16px', borderRadius: '999px',
-            border: `1px solid ${C.line}`, background: C.bg,
-            fontSize: '13px', fontWeight: 600, color: C.sub,
-            cursor: 'pointer',
-          }}
-        >
-          <i className="ti ti-logout" style={{ fontSize: isMobile ? '20px' : '16px' }} />
-          {!isMobile && 'Déconnexion'}
-        </button>
+            <button
+              onClick={logout}
+              title="Se déconnecter"
+              aria-label="Se déconnecter"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '8px 16px', borderRadius: '999px',
+                border: `1px solid ${C.line}`, background: C.bg,
+                fontSize: '13px', fontWeight: 600, color: C.sub,
+                cursor: 'pointer',
+              }}
+            >
+              <i className="ti ti-logout" style={{ fontSize: '16px' }} />
+              Déconnexion
+            </button>
+          </>
+        )}
+
+        {/* Mobile: account avatar opens a menu with Paramètres + Déconnexion */}
+        {isMobile && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setAccountMenuOpen((o) => !o)}
+              aria-label="Mon compte"
+              aria-haspopup="menu"
+              aria-expanded={accountMenuOpen}
+              style={{
+                display: 'flex', alignItems: 'center', padding: 2, cursor: 'pointer',
+                borderRadius: 999, border: `1px solid ${C.line}`, background: C.bg,
+              }}
+            >
+              <Avatar initials={myInitials} src={myPhoto} size={36} />
+            </button>
+
+            {accountMenuOpen && (
+              <>
+                {/* Tap-away backdrop */}
+                <div
+                  onClick={() => setAccountMenuOpen(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 90 }}
+                />
+                <div role="menu" style={{
+                  position: 'absolute', right: 0, top: 50,
+                  width: 'min(248px, calc(100vw - 24px))', background: '#fff',
+                  border: `1px solid ${C.line}`, borderRadius: 12, zIndex: 100,
+                  boxShadow: '0 8px 28px rgba(30,41,59,0.12)', overflow: 'hidden',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: `1px solid ${C.line}` }}>
+                    <Avatar initials={myInitials} src={myPhoto} size={42} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{myName}</div>
+                      <div style={{ fontSize: 13, color: C.sub }}>{roleLabel}</div>
+                    </div>
+                  </div>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setPage('parametres'); setAccountMenuOpen(false) }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+                      padding: '16px', border: 'none', borderBottom: `1px solid ${C.line}`, cursor: 'pointer',
+                      background: activePage === 'parametres' ? C.light : '#fff',
+                      color: activePage === 'parametres' ? C.primaryDark : C.ink,
+                      fontSize: 16, fontWeight: 600,
+                    }}
+                  >
+                    <i className="ti ti-settings" style={{ fontSize: 23 }} /> Paramètres
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => { setAccountMenuOpen(false); logout() }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+                      padding: '16px', border: 'none', cursor: 'pointer',
+                      background: '#fff', color: C.primaryDark, fontSize: 16, fontWeight: 600,
+                    }}
+                  >
+                    <i className="ti ti-logout" style={{ fontSize: 23 }} /> Déconnexion
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

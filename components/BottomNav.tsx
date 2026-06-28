@@ -20,7 +20,7 @@ export default function BottomNav() {
     <nav
       aria-label="Menu principal"
       style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50,
+        flexShrink: 0,
         display: 'flex',
         background: C.ink,
         borderTop: '1px solid rgba(255,255,255,0.08)',
