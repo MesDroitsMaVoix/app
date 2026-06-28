@@ -6,6 +6,7 @@ import {
   AgendaEvent, EventType,
 } from '@/store/useAppStore'
 import { C, Card } from '@/components/ui'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 /** A meeting a worker (chef d'atelier / délégué CVS) is allowed to create. */
 type EventTarget = { id: string; label: string; type: EventType; recipientIds: string[]; titlePlaceholder: string; atelierId?: string }
@@ -27,6 +28,7 @@ const iso = (y: number, m: number, d: number) =>
 
 export default function Agenda() {
   const { role, events, groups, ateliers, people, accounts, currentAccountId, addEvent, deleteEvent, toggleEventGroup } = useAppStore()
+  const isMobile = useIsMobile()
   const isStaff = canManage(role)
 
   // The person whose agenda a travailleur sees (their linked directory id)
@@ -90,11 +92,11 @@ export default function Agenda() {
     people.filter((p) => isPersonInEvent(e, p.id, groups, ateliers)).length
 
   return (
-    <div style={{ display: 'flex', gap: 22, height: '100%', alignItems: 'stretch' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 22, height: isMobile ? 'auto' : '100%', alignItems: 'stretch' }}>
       {/* Calendar */}
-      <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 24, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, color: C.ink, margin: 0 }}>
+      <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: isMobile ? 16 : 24, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: isMobile ? 22 : 28, fontWeight: 600, color: C.ink, margin: 0 }}>
             {MONTHS[month]} {year}
           </h2>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -121,7 +123,7 @@ export default function Agenda() {
           ))}
         </div>
 
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: '1fr' }}>
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: isMobile ? '54px' : '1fr' }}>
           {cells.map((day, i) => {
             if (day === null) {
               return <div key={i} style={{ borderRight: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`, background: '#fcfcfb' }} />
@@ -168,7 +170,7 @@ export default function Agenda() {
       </Card>
 
       {/* Side panel */}
-      <div style={{ width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+      <div style={{ width: isMobile ? '100%' : 340, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16, overflowY: isMobile ? 'visible' : 'auto' }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.primary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {selected === TODAY ? "Aujourd'hui" : 'Sélection'}

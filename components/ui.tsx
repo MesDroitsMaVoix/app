@@ -66,13 +66,13 @@ export function PageIntro({ icon, title, text }: { icon: string; title: string; 
     <div style={{ marginBottom: 28 }}>
       <h2 style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 600,
+        fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 6vw, 30px)', fontWeight: 600,
         color: C.ink, margin: '0 0 8px',
       }}>
-        <i className={`ti ${icon}`} style={{ fontSize: 34, color: C.primary }} />
+        <i className={`ti ${icon}`} style={{ fontSize: 'clamp(26px, 7vw, 34px)', color: C.primary, flexShrink: 0 }} />
         {title}
       </h2>
-      <p style={{ fontSize: 18, color: C.sub, margin: 0, lineHeight: 1.5, maxWidth: 760 }}>
+      <p style={{ fontSize: 'clamp(16px, 4.5vw, 18px)', color: C.sub, margin: 0, lineHeight: 1.5, maxWidth: 760 }}>
         {text}
       </p>
     </div>

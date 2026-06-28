@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useAppStore, PersonKind, cvsGroup } from '@/store/useAppStore'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 const KIND_LABEL: Record<PersonKind, string> = {
   admin: 'Administrateur',
@@ -15,6 +16,7 @@ const KIND_COLOR: Record<PersonKind, string> = {
 
 export default function GestionPersonnel() {
   const { people, groups, ateliers, accounts, createGroup, deleteGroup, toggleGroupMember, toggleGroupAtelier, addPerson, deletePerson, regenerateCode, setPage } = useAppStore()
+  const isMobile = useIsMobile()
   const accountForPerson = (personId: string) => accounts.find((a) => a.personId === personId)
   const atelierById = (id: string) => ateliers.find((a) => a.id === id)
   const [newName, setNewName] = useState('')
@@ -61,7 +63,7 @@ export default function GestionPersonnel() {
 
       <CvsSection />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
         {/* ---------- Groups ---------- */}
         <div>
           <h3 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: '0 0 14px' }}>Groupes</h3>
@@ -173,7 +175,7 @@ export default function GestionPersonnel() {
                       {ateliers.length === 0 ? (
                         <div style={{ fontSize: 14, color: C.sub, fontStyle: 'italic', marginBottom: 16 }}>Aucun atelier pour l&apos;instant.</div>
                       ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, marginBottom: 16 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: 8, marginBottom: 16 }}>
                           {ateliers.map((a) => {
                             const inGroup = g.atelierIds.includes(a.id)
                             return (
@@ -202,7 +204,7 @@ export default function GestionPersonnel() {
                       <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, margin: '0 0 10px', textTransform: 'uppercase' }}>
                         Personnes ajoutées individuellement
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: 8 }}>
                         {people.map((p) => {
                           const inGroup = g.memberIds.includes(p.id)
                           return (
@@ -534,7 +536,7 @@ function AteliersSection() {
         </button>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: 12 }}>
         {ateliers.map((a) => {
           const chef = a.chefId ? personById(a.chefId) : null
           return (
@@ -734,7 +736,7 @@ function PersonToggleGrid({
   onToggle: (personId: string) => void
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 180px), 1fr))', gap: 8 }}>
       {workers.map((p) => {
         const on = selected.includes(p.id)
         return (

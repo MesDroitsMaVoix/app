@@ -35,10 +35,10 @@ export default function Accueil() {
         background: C.primary, color: '#fff',
         borderRadius: 20, padding: '28px 30px', marginBottom: 28,
       }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 600, margin: '0 0 6px' }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 6vw, 30px)', fontWeight: 600, margin: '0 0 6px' }}>
           Bonjour {firstName} 👋
         </h2>
-        <p style={{ fontSize: 18, margin: 0, color: 'rgba(255,255,255,0.9)' }}>
+        <p style={{ fontSize: 'clamp(16px, 4.5vw, 18px)', margin: 0, color: 'rgba(255,255,255,0.9)' }}>
           Bienvenue sur votre espace. Ici, vous trouvez vos droits, vos réunions et vos représentants.
         </p>
       </div>
@@ -73,7 +73,7 @@ export default function Accueil() {
 
       {/* Shortcuts */}
       <h3 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: '0 0 14px' }}>Que voulez-vous faire ?</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 16 }}>
         {SHORTCUTS.map((s) => (
           <button
             key={s.id}

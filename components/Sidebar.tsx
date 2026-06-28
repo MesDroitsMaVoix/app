@@ -3,18 +3,20 @@
 import { useAppStore, PageId, Role, canManage, conversationParticipants, isConversationUnread } from '@/store/useAppStore'
 import { C } from '@/components/ui'
 
-type NavItem = { id: PageId; icon: string; label: string }
+export type NavItem = { id: PageId; icon: string; label: string; short: string }
 
-function navItems(role: Role): NavItem[] {
+/** Navigation entries, shared by the desktop Sidebar and the mobile BottomNav.
+ * `short` is a compact label for the bottom bar's narrow tabs. */
+export function navItems(role: Role): NavItem[] {
   return [
-    { id: 'accueil',     icon: 'ti-home',           label: 'Accueil' },
-    { id: 'droits',      icon: 'ti-book-2',         label: 'Mes droits' },
-    { id: 'agenda',      icon: 'ti-calendar-event', label: 'Agenda' },
-    { id: 'comptes',     icon: 'ti-file-text',      label: 'Comptes rendus' },
+    { id: 'accueil',     icon: 'ti-home',           label: 'Accueil',           short: 'Accueil' },
+    { id: 'droits',      icon: 'ti-book-2',         label: 'Mes droits',        short: 'Droits' },
+    { id: 'agenda',      icon: 'ti-calendar-event', label: 'Agenda',            short: 'Agenda' },
+    { id: 'comptes',     icon: 'ti-file-text',      label: 'Comptes rendus',    short: 'Comptes' },
     canManage(role)
-      ? { id: 'representants', icon: 'ti-users-group', label: 'Gestion du personnel' }
-      : { id: 'representants', icon: 'ti-users',       label: 'Mes représentants' },
-    { id: 'messagerie',  icon: 'ti-message-2',      label: 'Messagerie' },
+      ? { id: 'representants', icon: 'ti-users-group', label: 'Gestion du personnel', short: 'Personnel' }
+      : { id: 'representants', icon: 'ti-users',       label: 'Mes représentants',    short: 'Équipe' },
+    { id: 'messagerie',  icon: 'ti-message-2',      label: 'Messagerie',        short: 'Messages' },
   ]
 }
 

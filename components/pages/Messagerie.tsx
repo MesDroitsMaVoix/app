@@ -6,6 +6,7 @@ import {
   Conversation, Person,
 } from '@/store/useAppStore'
 import { C, Avatar } from '@/components/ui'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 /* Messages can only be sent during working hours (8h30–16h30); reading is
  * always allowed. */
@@ -30,6 +31,9 @@ function convDisplay(c: Conversation, viewerId: string, people: Person[]): { nam
 
 export default function Messagerie() {
   const { conversations, activeConversationId, accounts, currentAccountId, people, setConversation, sendMessage, deleteMessage, startConversation, markConversationRead } = useAppStore()
+  const isMobile = useIsMobile()
+  // On phones the list and the conversation are two full-screen views (master/detail).
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
   const [draft, setDraft] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -82,7 +86,8 @@ export default function Messagerie() {
       border: `1px solid ${C.line}`, borderRadius: 16, overflow: 'hidden', background: '#fff',
     }}>
       {/* Conversation list */}
-      <div style={{ width: 280, borderRight: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column' }}>
+      {(!isMobile || mobileView === 'list') && (
+      <div style={{ width: isMobile ? '100%' : 280, borderRight: isMobile ? 'none' : `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div style={{ padding: '18px 18px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <span style={{ fontSize: 18, fontWeight: 600, color: C.ink }}>Mes conversations</span>
           <button
@@ -107,7 +112,7 @@ export default function Messagerie() {
             return (
               <button
                 key={c.id}
-                onClick={() => setConversation(c.id)}
+                onClick={() => { setConversation(c.id); setMobileView('chat') }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
                   padding: '14px 18px', border: 'none', cursor: 'pointer',
@@ -141,8 +146,10 @@ export default function Messagerie() {
           })}
         </div>
       </div>
+      )}
 
       {/* Chat */}
+      {(!isMobile || mobileView === 'chat') && (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {!active ? (
           <div style={{
@@ -164,6 +171,19 @@ export default function Messagerie() {
           return (
             <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.line}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {isMobile && (
+                  <button
+                    onClick={() => setMobileView('list')}
+                    aria-label="Retour aux conversations"
+                    style={{
+                      width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                      border: `1px solid ${C.line}`, background: C.bg, color: C.ink,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    }}
+                  >
+                    <i className="ti ti-arrow-left" style={{ fontSize: 22 }} />
+                  </button>
+                )}
                 <Avatar initials={disp.initials} size={44} src={disp.photoUrl} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -296,6 +316,7 @@ export default function Messagerie() {
         </>
         )}
       </div>
+      )}
 
       {/* New-conversation picker */}
       {pickerOpen && (
@@ -355,6 +376,7 @@ export default function Messagerie() {
                     onClick={() => {
                       startConversation({ id: p.id, name: p.name, initials: p.initials, role: '' }, viewerId)
                       setPickerOpen(false)
+                      setMobileView('chat')
                     }}
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',

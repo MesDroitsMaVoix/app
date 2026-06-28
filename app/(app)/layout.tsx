@@ -2,13 +2,16 @@
 
 import { useEffect } from 'react'
 import Sidebar from '@/components/Sidebar'
+import BottomNav from '@/components/BottomNav'
 import Topbar from '@/components/Topbar'
 import Login from '@/components/Login'
 import { useAppStore } from '@/store/useAppStore'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const currentAccountId = useAppStore((s) => s.currentAccountId)
   const loading = useAppStore((s) => s.loading)
+  const isMobile = useIsMobile()
   const persist = useAppStore((s) => s.persist)
   const hydrate = useAppStore((s) => s.hydrate)
   const refresh = useAppStore((s) => s.refresh)
@@ -52,18 +55,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       overflow: 'hidden',
       background: '#fff',
     }}>
-      <Sidebar />
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      {!isMobile && <Sidebar />}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <Topbar />
         <main style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '32px',
+          padding: isMobile ? '16px' : '32px',
+          paddingBottom: isMobile ? 'calc(72px + env(safe-area-inset-bottom))' : undefined,
           background: '#F8FAFC',
         }}>
           {children}
         </main>
       </div>
+      {isMobile && <BottomNav />}
     </div>
   )
 }

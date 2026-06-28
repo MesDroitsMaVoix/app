@@ -90,7 +90,7 @@ export default function Droits() {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(520px, 1fr))', gap: 14, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 520px), 1fr))', gap: 14, alignItems: 'start' }}>
         {DROITS.map((d, i) => {
           const isOpen = open === i
           return (

@@ -3,6 +3,7 @@
 import { useRef } from 'react'
 import { useAppStore, canManage } from '@/store/useAppStore'
 import { C } from '@/components/ui'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 const PAGE_TITLES = {
   accueil: 'Accueil',
@@ -31,6 +32,7 @@ export default function Topbar() {
     activePage, role, notifOpen, logout, toggleNotif, setPage,
     notifications, accounts, currentAccountId, markNotificationsRead, clearNotifications, setConversation,
   } = useAppStore()
+  const isMobile = useIsMobile()
   const roleLabel = role === 'admin' ? 'Administrateur' : 'Travailleur'
   const title =
     activePage === 'representants' && canManage(role)
@@ -62,7 +64,7 @@ export default function Topbar() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '18px 32px',
+      padding: isMobile ? '14px 16px' : '18px 32px',
       borderBottom: `1px solid ${C.line}`,
       background: '#fff',
       flexShrink: 0,
@@ -71,10 +73,14 @@ export default function Topbar() {
     }}>
       <h1 style={{
         fontFamily: 'var(--font-display)',
-        fontSize: '22px',
+        fontSize: isMobile ? '19px' : '22px',
         fontWeight: 600,
         color: C.ink,
         margin: 0,
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
       }}>
         {title}
       </h1>
@@ -110,7 +116,7 @@ export default function Topbar() {
           {notifOpen && (
             <div style={{
               position: 'absolute', right: 0, top: '48px',
-              width: '320px', background: '#fff',
+              width: isMobile ? 'min(320px, calc(100vw - 24px))' : '320px', background: '#fff',
               border: `1px solid ${C.line}`, borderRadius: '12px',
               zIndex: 100, boxShadow: '0 8px 28px rgba(30,41,59,0.12)',
               maxHeight: '420px', overflowY: 'auto',
@@ -159,16 +165,18 @@ export default function Topbar() {
           )}
         </div>
 
-        {/* Current role badge */}
-        <span style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '8px 16px', borderRadius: '999px',
-          border: `1px solid ${C.line}`, background: C.bg,
-          fontSize: '13px', fontWeight: 600, color: C.sub,
-        }}>
-          <i className="ti ti-user-circle" style={{ fontSize: '16px' }} />
-          {roleLabel}
-        </span>
+        {/* Current role badge — hidden on mobile to save space */}
+        {!isMobile && (
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '8px 16px', borderRadius: '999px',
+            border: `1px solid ${C.line}`, background: C.bg,
+            fontSize: '13px', fontWeight: 600, color: C.sub,
+          }}>
+            <i className="ti ti-user-circle" style={{ fontSize: '16px' }} />
+            {roleLabel}
+          </span>
+        )}
 
         {/* Settings */}
         <button
@@ -187,11 +195,17 @@ export default function Topbar() {
           <i className="ti ti-settings" />
         </button>
 
-        {/* Logout */}
+        {/* Logout — icon-only on mobile, labelled on desktop */}
         <button
           onClick={logout}
           title="Se déconnecter"
-          style={{
+          aria-label="Se déconnecter"
+          style={isMobile ? {
+            width: '40px', height: '40px', borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: C.bg, border: `1px solid ${C.line}`,
+            color: C.sub, fontSize: '20px', cursor: 'pointer',
+          } : {
             display: 'flex', alignItems: 'center', gap: '8px',
             padding: '8px 16px', borderRadius: '999px',
             border: `1px solid ${C.line}`, background: C.bg,
@@ -199,8 +213,8 @@ export default function Topbar() {
             cursor: 'pointer',
           }}
         >
-          <i className="ti ti-logout" style={{ fontSize: '16px' }} />
-          Déconnexion
+          <i className="ti ti-logout" style={{ fontSize: isMobile ? '20px' : '16px' }} />
+          {!isMobile && 'Déconnexion'}
         </button>
       </div>
     </div>

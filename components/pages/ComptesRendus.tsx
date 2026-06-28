@@ -598,7 +598,7 @@ function ReportEditor({
             </button>
 
             {showPeople && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8, marginTop: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 210px), 1fr))', gap: 8, marginTop: 10 }}>
                 {people.map((p) => {
                   const on = personIds.includes(p.id)
                   return (
