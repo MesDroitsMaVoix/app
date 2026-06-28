@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { C } from '@/components/ui'
+import { getBiometricEntry, verifyBiometric, clearBiometric, type BiometricEntry } from '@/lib/biometric'
 
 const ROLE_LABEL = {
   admin: 'Administrateur',
@@ -12,15 +13,52 @@ const ROLE_LABEL = {
 type Phase = 'enter' | 'create' | 'confirm'
 
 export default function Login() {
-  const { accounts, persist, login, changeCode, signInAccount } = useAppStore()
+  const { accounts, persist, login, changeCode, signInAccount, biometricLogin } = useAppStore()
 
   const [selectedId, setSelectedId] = useState(accounts[0]?.id ?? '')
   const [phase, setPhase] = useState<Phase>('enter')
   const [pin, setPin] = useState('')
   const [createdPin, setCreatedPin] = useState('')
   const [error, setError] = useState('')
+  const [bioEntry, setBioEntry] = useState<BiometricEntry | null>(null)
+  const [bioBusy, setBioBusy] = useState(false)
 
   const selected = accounts.find((a) => a.id === selectedId)
+
+  // Pick up a biometric enrollment for an account that still exists, and
+  // pre-select it so the unlock matches the chosen account.
+  useEffect(() => {
+    if (!persist) return
+    const entry = getBiometricEntry()
+    if (entry && accounts.some((a) => a.id === entry.accountId)) {
+      setBioEntry(entry)
+      setSelectedId(entry.accountId)
+    } else {
+      setBioEntry(null)
+    }
+  }, [persist, accounts])
+
+  const unlockWithBiometric = async () => {
+    if (!bioEntry || bioBusy) return
+    setBioBusy(true)
+    setError('')
+    try {
+      const ok = await verifyBiometric(bioEntry)
+      if (!ok) { setError('Reconnaissance échouée. Réessayez ou entrez votre code.'); return }
+      const res = await biometricLogin(bioEntry.accountId, bioEntry.token)
+      if (!res.ok) {
+        // Token revoked / expired (e.g. secret rotated) → drop the enrollment.
+        clearBiometric()
+        setBioEntry(null)
+        setError('Déverrouillage expiré. Entrez votre code pour vous reconnecter.')
+      }
+    } finally {
+      setBioBusy(false)
+    }
+  }
+
+  // Only offer biometric on the account it was enrolled for, during normal login.
+  const canUseBiometric = !!bioEntry && bioEntry.accountId === selectedId && phase === 'enter'
   // First login = no code yet. In configured mode the code is never sent to the
   // client, so we rely on the `hasCode` flag; in demo mode on `code === null`.
   const isFirstLogin = (a?: typeof selected) => (persist ? a != null && !a.hasCode : a?.code === null)
@@ -133,6 +171,23 @@ export default function Login() {
         <div style={{ minHeight: 20, textAlign: 'center', marginBottom: 8 }}>
           {error && <span style={{ color: '#DC2626', fontSize: 13, fontWeight: 700 }}>{error}</span>}
         </div>
+
+        {/* Biometric unlock — only when this account has enrolled on this device */}
+        {canUseBiometric && (
+          <button
+            onClick={unlockWithBiometric}
+            disabled={bioBusy}
+            style={{
+              width: '100%', marginBottom: 14, padding: '13px 16px', borderRadius: 12,
+              border: `1px solid ${C.primary}`, background: C.light, color: C.primaryDark,
+              fontSize: 16, fontWeight: 700, cursor: bioBusy ? 'wait' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            }}
+          >
+            <i className={`ti ${bioBusy ? 'ti-loader-2' : 'ti-fingerprint'}`} style={{ fontSize: 22 }} />
+            {bioBusy ? 'Vérification…' : 'Déverrouiller avec la biométrie'}
+          </button>
+        )}
 
         {/* Keypad */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>

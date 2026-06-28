@@ -9,7 +9,9 @@
 import {
   supabaseConfigured, restSelectAll, restUpsert, restDelete, storageUpload, Row,
 } from '@/lib/supabaseRest'
-import { setSession, clearSession, getSessionAccountId } from '@/lib/session'
+import {
+  setSession, clearSession, getSessionAccountId, issueBiometricToken, verifyBiometricToken,
+} from '@/lib/session'
 
 const TABLES = ['accounts', 'people', 'ateliers', 'groups', 'events', 'reports', 'conversations', 'notifications'] as const
 export type TableName = (typeof TABLES)[number]
@@ -112,7 +114,7 @@ export async function bootstrap(): Promise<Bootstrap> {
 
 export type SignInResult =
   | { ok: true; account: ReturnType<typeof sanitizeAccount>; data: Record<TableName, unknown[]> }
-  | { ok: false; error: 'bad-code' | 'no-account' | 'not-configured' }
+  | { ok: false; error: 'bad-code' | 'bad-token' | 'no-account' | 'not-configured' }
 
 /** Verify a 4-digit code server-side and open a session. Handles first login
  * (an account with no code yet adopts the code entered). */
@@ -132,6 +134,31 @@ export async function signIn(accountId: string, code: string): Promise<SignInRes
 
 export async function signOut(): Promise<void> {
   await clearSession()
+}
+
+/* ---------- Biometric unlock (Option A: device-local convenience) ---------- */
+
+/** Issue a biometric token for the currently logged-in account. Called when the
+ * user enables Face ID / fingerprint unlock on a device — it must already hold a
+ * valid session (i.e. they just signed in with their code). The returned token is
+ * stored on the device, behind its biometric gate, and never leaves it. */
+export async function enableBiometric(): Promise<{ ok: boolean; token?: string }> {
+  if (!supabaseConfigured()) return { ok: false }
+  const accountId = await requireAuth()
+  return { ok: true, token: issueBiometricToken(accountId) }
+}
+
+/** Open a session from a biometric token. The device has already verified the
+ * user's biometric locally before calling this; here we only check the token is
+ * authentic and still maps to an existing account. */
+export async function signInWithBiometric(accountId: string, token: string): Promise<SignInResult> {
+  if (!supabaseConfigured()) return { ok: false, error: 'not-configured' }
+  const authorised = verifyBiometricToken(token)
+  if (!authorised || authorised !== accountId) return { ok: false, error: 'bad-token' }
+  const acc = (await fetchAccounts()).find((a) => a.id === accountId)
+  if (!acc) return { ok: false, error: 'no-account' }
+  await setSession(accountId)
+  return { ok: true, account: sanitizeAccount(acc), data: await loadAllData() }
 }
 
 /** Re-fetch all data (used by the polling refresh). Requires a session. */

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { bootstrap, signIn, signOut, loadData, persistUpsert, persistDelete } from '@/app/actions'
+import { bootstrap, signIn, signInWithBiometric, signOut, loadData, persistUpsert, persistDelete } from '@/app/actions'
 
 export type Role = 'admin' | 'travailleur'
 
@@ -306,6 +306,8 @@ interface AppState {
 
   /** Verify a code server-side and open a session (configured mode). */
   signInAccount: (accountId: string, code: string) => Promise<{ ok: boolean; error?: string }>
+  /** Open a session from a device biometric token (Option A unlock). */
+  biometricLogin: (accountId: string, token: string) => Promise<{ ok: boolean; error?: string }>
   login: (accountId: string) => void
   logout: () => void
   changeCode: (accountId: string, code: string) => void
@@ -422,6 +424,24 @@ function applyData(set: (partial: Partial<AppState>) => void, d: Record<string, 
   })
 }
 
+/** Apply a successful sign-in (code or biometric): load the data, set the
+ * current account and start mirroring changes to the database. */
+function applySignedIn(
+  set: (partial: Partial<AppState>) => void,
+  account: { id: string; role?: unknown },
+  data: Record<string, unknown[]>
+) {
+  applyData(set, data)
+  set({
+    accounts: data.accounts as Account[],
+    currentAccountId: account.id,
+    role: (account.role as Role) ?? 'travailleur',
+    activePage: 'accueil',
+    persist: true,
+  })
+  startSync()
+}
+
 /** True while applying server data, so the sync subscription doesn't echo it
  * straight back to the database. */
 let applyingRemote = false
@@ -524,15 +544,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   signInAccount: async (accountId, code) => {
     const res = await signIn(accountId, code)
     if (!res.ok) return { ok: false, error: res.error }
-    applyData(set, res.data)
-    set({
-      accounts: res.data.accounts as Account[],
-      currentAccountId: res.account.id,
-      role: (res.account.role as Role) ?? 'travailleur',
-      activePage: 'accueil',
-      persist: true,
-    })
-    startSync()
+    applySignedIn(set, res.account, res.data)
+    return { ok: true }
+  },
+
+  biometricLogin: async (accountId, token) => {
+    const res = await signInWithBiometric(accountId, token)
+    if (!res.ok) return { ok: false, error: res.error }
+    applySignedIn(set, res.account, res.data)
     return { ok: true }
   },
 

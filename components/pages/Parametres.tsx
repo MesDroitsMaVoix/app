@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
 import { uploadAttachment } from '@/app/actions'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
+import { biometricAvailable, enrollBiometric, getBiometricEntry, clearBiometric } from '@/lib/biometric'
 
 const ROLE_LABEL = {
   admin: 'Administrateur',
@@ -32,6 +33,41 @@ export default function Parametres() {
   const [photoBusy, setPhotoBusy] = useState(false)
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Biometric unlock (Option A): only in configured mode, on a device with a
+  // usable sensor, tracked per logged-in account.
+  const [bioSupported, setBioSupported] = useState(false)
+  const [bioEnabled, setBioEnabled] = useState(false)
+  const [bioBusy, setBioBusy] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    biometricAvailable().then((ok) => { if (alive) setBioSupported(ok) })
+    const entry = getBiometricEntry()
+    setBioEnabled(!!entry && entry.accountId === currentAccountId)
+    return () => { alive = false }
+  }, [currentAccountId])
+
+  const toggleBiometric = async () => {
+    if (bioBusy) return
+    setBioBusy(true)
+    setMessage(null)
+    try {
+      if (bioEnabled) {
+        clearBiometric()
+        setBioEnabled(false)
+        setMessage({ type: 'ok', text: 'Déverrouillage biométrique désactivé sur cet appareil.' })
+      } else {
+        const ok = await enrollBiometric(me!.id, me!.name)
+        setBioEnabled(ok)
+        setMessage(ok
+          ? { type: 'ok', text: 'Déverrouillage biométrique activé sur cet appareil.' }
+          : { type: 'err', text: "L'activation a été annulée ou n'est pas disponible." })
+      }
+    } finally {
+      setBioBusy(false)
+    }
+  }
 
   if (!me) return null
 
@@ -167,6 +203,47 @@ export default function Parametres() {
           Enregistrer le nouveau code
         </button>
       </Card>
+
+      {/* Biometric unlock — convenience login on this device */}
+      {persist && bioSupported && (
+        <Card style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+              background: C.light, color: C.primary,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <i className="ti ti-fingerprint" style={{ fontSize: 24 }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, color: C.ink, margin: '0 0 4px' }}>
+                Déverrouillage biométrique
+              </h3>
+              <p style={{ fontSize: 15, color: C.sub, margin: 0, lineHeight: 1.4 }}>
+                {bioEnabled
+                  ? 'Activé sur cet appareil : connectez-vous avec Face ID ou votre empreinte, sans retaper le code.'
+                  : 'Activez Face ID ou votre empreinte sur cet appareil pour vous connecter sans retaper le code.'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={toggleBiometric}
+            disabled={bioBusy}
+            style={{
+              marginTop: 16, width: '100%', borderRadius: 12, padding: 14, fontSize: 16, fontWeight: 600,
+              cursor: bioBusy ? 'wait' : 'pointer',
+              border: bioEnabled ? `1px solid ${C.line}` : 'none',
+              background: bioEnabled ? '#fff' : C.primary,
+              color: bioEnabled ? '#DC2626' : '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            <i className={`ti ${bioBusy ? 'ti-loader-2' : bioEnabled ? 'ti-lock-open' : 'ti-fingerprint'}`} style={{ fontSize: 20 }} />
+            {bioBusy ? 'Patientez…' : bioEnabled ? 'Désactiver sur cet appareil' : 'Activer sur cet appareil'}
+          </button>
+        </Card>
+      )}
     </div>
   )
 }
