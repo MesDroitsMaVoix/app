@@ -9,12 +9,21 @@ import { useAppStore } from '@/store/useAppStore'
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const currentAccountId = useAppStore((s) => s.currentAccountId)
   const loading = useAppStore((s) => s.loading)
+  const persist = useAppStore((s) => s.persist)
   const hydrate = useAppStore((s) => s.hydrate)
+  const refresh = useAppStore((s) => s.refresh)
 
   // Load data from the database once, on first mount.
   useEffect(() => {
     hydrate()
   }, [hydrate])
+
+  // Light polling: pull others' changes (new messages, reports…) every 15s.
+  useEffect(() => {
+    if (!persist || !currentAccountId) return
+    const t = setInterval(() => { refresh() }, 15_000)
+    return () => clearInterval(t)
+  }, [persist, currentAccountId, refresh])
 
   if (loading) {
     return (

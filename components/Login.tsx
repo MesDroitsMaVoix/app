@@ -12,7 +12,7 @@ const ROLE_LABEL = {
 type Phase = 'enter' | 'create' | 'confirm'
 
 export default function Login() {
-  const { accounts, login, changeCode } = useAppStore()
+  const { accounts, persist, login, changeCode, signInAccount } = useAppStore()
 
   const [selectedId, setSelectedId] = useState(accounts[0]?.id ?? '')
   const [phase, setPhase] = useState<Phase>('enter')
@@ -21,22 +21,36 @@ export default function Login() {
   const [error, setError] = useState('')
 
   const selected = accounts.find((a) => a.id === selectedId)
+  // First login = no code yet. In configured mode the code is never sent to the
+  // client, so we rely on the `hasCode` flag; in demo mode on `code === null`.
+  const isFirstLogin = (a?: typeof selected) => (persist ? a != null && !a.hasCode : a?.code === null)
 
   useEffect(() => {
-    setPhase(selected && selected.code === null ? 'create' : 'enter')
+    setPhase(isFirstLogin(selected) ? 'create' : 'enter')
     setPin(''); setCreatedPin(''); setError('')
-  }, [selectedId, selected])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, selected, persist])
 
-  const complete = (value: string) => {
+  const complete = async (value: string) => {
     if (!selected) return
     if (phase === 'enter') {
-      if (value === selected.code) login(selected.id)
-      else { setError('Code incorrect. Réessayez.'); setPin('') }
+      if (persist) {
+        const res = await signInAccount(selected.id, value)
+        if (!res.ok) { setError('Code incorrect. Réessayez.'); setPin('') }
+      } else if (value === selected.code) {
+        login(selected.id)
+      } else { setError('Code incorrect. Réessayez.'); setPin('') }
     } else if (phase === 'create') {
       setCreatedPin(value); setPin(''); setError(''); setPhase('confirm')
     } else {
-      if (value === createdPin) { changeCode(selected.id, value); login(selected.id) }
-      else { setError('Les deux codes sont différents.'); setCreatedPin(''); setPin(''); setPhase('create') }
+      if (value === createdPin) {
+        if (persist) {
+          const res = await signInAccount(selected.id, value)
+          if (!res.ok) { setError('Échec de la connexion. Réessayez.'); setCreatedPin(''); setPin(''); setPhase('create') }
+        } else {
+          changeCode(selected.id, value); login(selected.id)
+        }
+      } else { setError('Les deux codes sont différents.'); setCreatedPin(''); setPin(''); setPhase('create') }
     }
   }
 

@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import {
-  useAppStore, canManage, isPersonInScope, groupPersonIds, ateliersLedBy, CURRENT_USER_ID,
+  useAppStore, canManage, isPersonInScope, groupPersonIds, ateliersLedBy, isCvsDelegate, cvsMemberIds, CURRENT_USER_ID,
   Report, ReportAction, ReportAttachment, EventType, Group, Person, Atelier,
 } from '@/store/useAppStore'
 import { uploadAttachment } from '@/app/actions'
-import { C, PageIntro, Card, Avatar } from '@/components/ui'
+import { C, PageIntro, Card, Avatar, ReadAloud } from '@/components/ui'
 
 const TYPE_COLORS: Record<EventType, string> = {
   CVS:         '#FF6B5E',
@@ -22,28 +22,50 @@ export default function ComptesRendus() {
 
   const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? CURRENT_USER_ID
 
-  // Ateliers led by the current worker (chef or suppléant).
+  // Ateliers led by the current worker (chef or suppléant), and CVS role.
   const myAteliers = ateliersLedBy(viewerId, ateliers)
   const isLead = !isStaff && myAteliers.length > 0
+  const cvsDelegate = !isStaff && isCvsDelegate(viewerId, groups)
   const myAtelierIds = myAteliers.map((a) => a.id)
-  const canCompose = isStaff || isLead
 
-  // A lead may edit/delete a report only while it is pending and it belongs to
-  // one of their ateliers (or they authored it).
+  // What a non-admin worker can write a report about: each of their ateliers,
+  // and (if a CVS délégué/suppléant) the CVS itself.
+  const composeTargets: ComposeTarget[] = [
+    ...myAteliers.map((a) => ({
+      id: a.id, label: a.name, type: 'Atelier' as EventType,
+      personIds: a.memberIds, audienceAll: false, atelierId: a.id, cvs: false,
+    })),
+    ...(cvsDelegate
+      ? [
+          { id: 'cvs-plenary', label: 'Conseil de la Vie Sociale (CVS)', type: 'CVS' as EventType, personIds: [], audienceAll: true, cvs: true, contextLabel: 'Conseil de la Vie Sociale (CVS)' },
+          { id: 'cvs-prep', label: 'Préréunion de préparation (CVS)', type: 'CVS' as EventType, personIds: cvsMemberIds(groups), audienceAll: false, cvs: true, contextLabel: 'Préréunion CVS' },
+        ]
+      : []),
+  ]
+  const canCompose = isStaff || composeTargets.length > 0
+
+  // A worker may edit/delete a report only while it is pending and it concerns
+  // one of their ateliers / the CVS (or they authored it).
   const canEditReport = (r: Report): boolean => {
     if (isStaff) return true
-    if (!isLead || r.status !== 'pending') return false
-    return r.authorId === viewerId || (r.atelierId != null && myAtelierIds.includes(r.atelierId))
+    if (r.status !== 'pending') return false
+    if (r.authorId === viewerId) return true
+    if (isLead && r.atelierId != null && myAtelierIds.includes(r.atelierId)) return true
+    if (cvsDelegate && r.cvs) return true
+    return false
   }
 
   // Visibility:
   //  - admin: everything (incl. pending, to validate)
-  //  - lead: validated reports in scope + their atelier's reports (incl. pending)
+  //  - chef/délégué CVS: validated reports in scope + their own pending ones
   //  - travailleur: only validated reports in scope
   const visibleReports = reports.filter((r) => {
     if (isStaff) return true
-    const mine = r.authorId === viewerId || (r.atelierId != null && myAtelierIds.includes(r.atelierId))
-    if (isLead && mine) return true
+    const mine =
+      r.authorId === viewerId ||
+      (r.atelierId != null && myAtelierIds.includes(r.atelierId)) ||
+      (cvsDelegate && r.cvs === true)
+    if (mine) return true
     return r.status === 'validated' && isPersonInScope(r, viewerId, groups, ateliers)
   })
 
@@ -55,13 +77,13 @@ export default function ComptesRendus() {
   if (editingId !== null) {
     const initial = editingId === 'new' ? null : reports.find((r) => r.id === editingId) ?? null
 
-    // Leads use a simplified editor scoped to their ateliers; reports they save
-    // are 'pending' until an admin validates them.
-    if (isLead && !isStaff) {
+    // Non-admin composers (chef d'atelier / délégué CVS) use a scoped editor;
+    // their reports are 'pending' until an admin validates them.
+    if (!isStaff && composeTargets.length > 0) {
       return (
-        <LeadReportEditor
+        <WorkerReportEditor
           initial={initial}
-          ateliers={myAteliers}
+          targets={composeTargets}
           authorId={viewerId}
           onCancel={() => setEditingId(null)}
           onSave={(data) => {
@@ -80,6 +102,7 @@ export default function ComptesRendus() {
         groups={groups}
         people={people}
         ateliers={ateliers}
+        authorId={viewerId}
         onCancel={() => setEditingId(null)}
         onSave={(data) => {
           if (editingId === 'new') addReport(data)
@@ -101,7 +124,14 @@ export default function ComptesRendus() {
           <button onClick={() => setSelectedId(null)} style={backBtn}>
             <i className="ti ti-arrow-left" style={{ fontSize: 22 }} /> Retour à la liste
           </button>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <ReadAloud getText={() => [
+              r.title,
+              r.date,
+              r.summary && `En résumé. ${r.summary}`,
+              r.decisions.length ? `Ce qui a été décidé. ${r.decisions.join('. ')}` : '',
+              r.actions.length ? `Suivi des actions. ${r.actions.map((a) => `${a.text}, ${a.done ? 'fait' : 'en cours'}`).join('. ')}` : '',
+            ].filter(Boolean).join('. ')} />
             {isStaff && r.status === 'pending' && (
               <button onClick={() => validateReport(r.id)} style={{ ...ghostBtn(C.green), background: C.green, color: '#fff', borderColor: C.green }}>
                 <i className="ti ti-circle-check" style={{ fontSize: 18 }} /> Valider
@@ -142,7 +172,29 @@ export default function ComptesRendus() {
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600, color: C.ink, margin: '0 0 4px' }}>
           {r.title}
         </h2>
-        <div style={{ fontSize: 16, color: C.sub, marginBottom: isStaff ? 12 : 24 }}>{r.date}</div>
+        <div style={{ fontSize: 16, color: C.sub, marginBottom: 12 }}>{r.date}</div>
+
+        {/* Author + when written + context (atelier / CVS) — visible to everyone */}
+        {(() => {
+          const author = people.find((p) => p.id === r.authorId)
+          const context = r.atelierId ? ateliers.find((a) => a.id === r.atelierId)?.name : r.contextLabel
+          const written = r.createdAt
+            ? new Date(r.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+            : null
+          if (!author && !context && !written) return null
+          return (
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, marginBottom: 20, fontSize: 14, color: C.sub }}>
+              {context && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, color: C.primaryDark, background: C.light, borderRadius: 999, padding: '4px 12px' }}>
+                  <i className={`ti ${r.atelierId ? 'ti-tools' : 'ti-gavel'}`} style={{ fontSize: 15 }} />
+                  {context}
+                </span>
+              )}
+              {author && <span><i className="ti ti-user" style={{ verticalAlign: '-2px', marginRight: 6 }} />Rédigé par {author.name}</span>}
+              {written && <span><i className="ti ti-calendar" style={{ verticalAlign: '-2px', marginRight: 6 }} />le {written}</span>}
+            </div>
+          )
+        })()}
 
         {isStaff && (
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 24, fontSize: 14, color: C.sub }}>
@@ -238,7 +290,7 @@ export default function ComptesRendus() {
         )}
       </div>
 
-      {isLead && <LeadAteliersBar myAteliers={myAteliers} />}
+      {(isLead || cvsDelegate) && <ResponsibilitiesBar myAteliers={myAteliers} cvsDelegate={cvsDelegate} />}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {visibleReports.length === 0 && (
@@ -316,12 +368,13 @@ export default function ComptesRendus() {
 /* ---------- Editor ---------- */
 
 function ReportEditor({
-  initial, groups, people, ateliers, onSave, onCancel,
+  initial, groups, people, ateliers, authorId, onSave, onCancel,
 }: {
   initial: Report | null
   groups: Group[]
   people: Person[]
   ateliers: Atelier[]
+  authorId: string
   onSave: (data: Omit<Report, 'id'>) => void
   onCancel: () => void
 }) {
@@ -371,8 +424,11 @@ function ReportEditor({
       attachments,
       // Admin reports are published directly; existing fields are preserved.
       status: initial?.status ?? 'validated',
-      authorId: initial?.authorId,
+      authorId: initial?.authorId ?? authorId,
       atelierId: initial?.atelierId,
+      cvs: initial?.cvs,
+      contextLabel: initial?.contextLabel,
+      createdAt: initial?.createdAt ?? Date.now(),
     })
   }
 
@@ -634,45 +690,62 @@ function DeleteDialog({ report, onConfirm, onCancel }: { report: Report; onConfi
   )
 }
 
-/* ---------- Lead (chef d'atelier) editor ---------- */
+/* ---------- Worker (chef d'atelier / délégué CVS) editor ---------- */
 
-function LeadReportEditor({
-  initial, ateliers, authorId, onSave, onCancel,
+type ComposeTarget = {
+  id: string
+  label: string
+  type: EventType
+  personIds: string[]
+  audienceAll: boolean
+  atelierId?: string
+  cvs?: boolean
+  contextLabel?: string
+}
+
+function WorkerReportEditor({
+  initial, targets, authorId, onSave, onCancel,
 }: {
   initial: Report | null
-  ateliers: Atelier[]
+  targets: ComposeTarget[]
   authorId: string
   onSave: (data: Omit<Report, 'id'>) => void
   onCancel: () => void
 }) {
+  const initialTargetId = initial
+    ? (initial.cvs ? (initial.audienceAll ? 'cvs-plenary' : 'cvs-prep') : initial.atelierId ?? targets[0]?.id)
+    : targets[0]?.id
+  const [targetId, setTargetId] = useState<string>(initialTargetId ?? '')
   const [title, setTitle] = useState(initial?.title ?? '')
   const [date, setDate] = useState(initial?.date ?? '')
-  const [atelierId, setAtelierId] = useState<string>(initial?.atelierId ?? ateliers[0]?.id ?? '')
   const [summary, setSummary] = useState(initial?.summary ?? '')
   const [decisions, setDecisions] = useState<string[]>(initial?.decisions ?? [''])
   const [actions, setActions] = useState<ReportAction[]>(initial?.actions ?? [])
   const [attachments, setAttachments] = useState<ReportAttachment[]>(initial?.attachments ?? [])
   const [error, setError] = useState('')
 
-  const atelier = ateliers.find((a) => a.id === atelierId)
+  const target = targets.find((t) => t.id === targetId)
 
   const save = () => {
     if (!title.trim()) { setError('Le titre est obligatoire.'); return }
-    if (!atelier) { setError('Choisissez un atelier.'); return }
+    if (!target) { setError('Choisissez de quoi il s’agit.'); return }
     onSave({
       title: title.trim(),
       date: date.trim() || 'Date à préciser',
-      type: 'Atelier',
+      type: target.type,
       summary: summary.trim(),
       decisions: decisions.map((d) => d.trim()).filter(Boolean),
       actions: actions.map((a) => ({ ...a, text: a.text.trim() })).filter((a) => a.text),
-      // Audience = members of the atelier this report is about.
       groupIds: [],
-      personIds: atelier.memberIds,
+      personIds: target.personIds,
+      audienceAll: target.audienceAll,
       attachments,
       status: 'pending',
       authorId: initial?.authorId ?? authorId,
-      atelierId,
+      atelierId: target.atelierId,
+      cvs: target.cvs,
+      contextLabel: target.contextLabel,
+      createdAt: initial?.createdAt ?? Date.now(),
     })
   }
 
@@ -696,20 +769,22 @@ function LeadReportEditor({
       </div>
 
       <Card style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <Labeled label="Atelier concerné">
+        <Labeled label="Compte rendu de">
           <select
-            value={atelierId}
-            onChange={(e) => { setAtelierId(e.target.value); setError('') }}
+            value={targetId}
+            onChange={(e) => { setTargetId(e.target.value); setError('') }}
             style={{ ...field, fontWeight: 600, cursor: 'pointer', background: '#fff' }}
           >
-            {ateliers.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+            {targets.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
             ))}
           </select>
-          {atelier && (
+          {target && (
             <div style={{ marginTop: 8, fontSize: 14, color: C.primary, fontWeight: 600 }}>
               <i className="ti ti-eye" style={{ verticalAlign: '-2px', marginRight: 6 }} />
-              Visible par les {atelier.memberIds.length} membre(s) de l&apos;atelier
+              {target.audienceAll
+                ? 'Visible par tous les travailleurs'
+                : `Visible par les ${target.personIds.length} membre(s)`}
             </div>
           )}
         </Labeled>
@@ -801,21 +876,28 @@ function LeadReportEditor({
   )
 }
 
-/* ---------- Lead's ateliers overview (read-only) ---------- */
-/* Ateliers are defined by admins only; a chef/suppléant just sees which ones
- * they may write reports for. */
+/* ---------- Worker responsibilities overview (read-only) ---------- */
+/* Ateliers and the CVS are managed by admins; a chef/suppléant/délégué just
+ * sees what they may write reports for. */
 
-function LeadAteliersBar({ myAteliers }: { myAteliers: Atelier[] }) {
+function ResponsibilitiesBar({ myAteliers, cvsDelegate }: { myAteliers: Atelier[]; cvsDelegate: boolean }) {
   return (
     <Card style={{ marginBottom: 18, background: C.bg }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <i className="ti ti-tools" style={{ fontSize: 22, color: C.primary }} />
-        <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>Mes ateliers :</span>
+        <i className="ti ti-pencil" style={{ fontSize: 22, color: C.primary }} />
+        <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>Je peux rédiger pour :</span>
         {myAteliers.map((a) => (
-          <span key={a.id} style={{ fontSize: 14, fontWeight: 600, color: C.primaryDark, background: C.light, borderRadius: 999, padding: '4px 12px' }}>
+          <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 14, fontWeight: 600, color: C.primaryDark, background: C.light, borderRadius: 999, padding: '4px 12px' }}>
+            <i className="ti ti-tools" style={{ fontSize: 14 }} />
             {a.name}
           </span>
         ))}
+        {cvsDelegate && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 14, fontWeight: 600, color: C.primaryDark, background: C.light, borderRadius: 999, padding: '4px 12px' }}>
+            <i className="ti ti-gavel" style={{ fontSize: 14 }} />
+            Conseil de la Vie Sociale (CVS)
+          </span>
+        )}
       </div>
     </Card>
   )

@@ -2,10 +2,13 @@
 
 import { useState } from 'react'
 import {
-  useAppStore, isPersonInEvent, ateliersLedBy, CURRENT_USER_ID, canManage,
-  AgendaEvent, EventType, Atelier,
+  useAppStore, isPersonInEvent, ateliersLedBy, isCvsDelegate, cvsMemberIds, CURRENT_USER_ID, canManage,
+  AgendaEvent, EventType,
 } from '@/store/useAppStore'
 import { C, Card } from '@/components/ui'
+
+/** A meeting a worker (chef d'atelier / délégué CVS) is allowed to create. */
+type EventTarget = { id: string; label: string; type: EventType; recipientIds: string[]; titlePlaceholder: string; atelierId?: string }
 
 const TYPE_COLORS: Record<EventType, string> = {
   CVS:         '#FF6B5E', // corail
@@ -29,12 +32,27 @@ export default function Agenda() {
   // The person whose agenda a travailleur sees (their linked directory id)
   const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? CURRENT_USER_ID
 
-  // A chef/suppléant may add meetings for their own ateliers.
+  // Meetings a worker may create: their ateliers (as chef/suppléant) and, if a
+  // CVS délégué/suppléant, CVS pre-meetings and the CVS itself.
   const myAteliers = ateliersLedBy(viewerId, ateliers)
-  const isLead = !isStaff && myAteliers.length > 0
-  const canCreate = isStaff || isLead
+  const cvsDelegate = isCvsDelegate(viewerId, groups)
+  const targets: EventTarget[] = isStaff
+    ? []
+    : [
+        ...myAteliers.map((a) => ({
+          id: a.id, label: a.name, type: 'Atelier' as EventType,
+          recipientIds: a.memberIds, titlePlaceholder: `Réunion ${a.name}`, atelierId: a.id,
+        })),
+        ...(cvsDelegate
+          ? [
+              { id: 'cvs-prep', label: 'Préréunion de préparation (CVS)', type: 'CVS' as EventType, recipientIds: cvsMemberIds(groups), titlePlaceholder: 'Préréunion de préparation' },
+              { id: 'cvs-meet', label: 'Réunion CVS (convoquer le CVS)', type: 'CVS' as EventType, recipientIds: people.map((p) => p.id), titlePlaceholder: 'Conseil de la Vie Sociale (CVS)' },
+            ]
+          : []),
+      ]
+  const canCreate = isStaff || targets.length > 0
   const canDeleteEvent = (e: AgendaEvent): boolean =>
-    isStaff || (isLead && e.authorId === viewerId)
+    isStaff || e.authorId === viewerId
 
   const [view, setView] = useState({ year: 2026, month: 5 })
   const [selected, setSelected] = useState<string>(TODAY)
@@ -171,7 +189,7 @@ export default function Agenda() {
             }}
           >
             <i className="ti ti-calendar-plus" style={{ fontSize: 22 }} />
-            {isStaff ? 'Nouvelle réunion' : 'Réunion de mon atelier'}
+            {isStaff ? 'Nouvelle réunion' : 'Organiser une réunion'}
           </button>
         )}
 
@@ -179,7 +197,7 @@ export default function Agenda() {
           <EventForm
             date={selected}
             authorId={viewerId}
-            leadAteliers={isStaff ? undefined : myAteliers}
+            targets={isStaff ? undefined : targets}
             onCancel={() => setShowForm(false)}
             onCreate={(e) => { addEvent(e); setShowForm(false) }}
           />
@@ -213,7 +231,13 @@ export default function Agenda() {
                   </button>
                 )}
               </div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: C.ink, marginBottom: 8 }}>{e.title}</div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: C.ink, marginBottom: e.atelierId ? 4 : 8 }}>{e.title}</div>
+              {e.atelierId && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: C.primaryDark, background: C.light, borderRadius: 999, padding: '3px 10px', marginBottom: 10 }}>
+                  <i className="ti ti-tools" style={{ fontSize: 14 }} />
+                  {ateliers.find((a) => a.id === e.atelierId)?.name ?? 'Atelier'}
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 15, color: C.sub }}>
                 <span><i className="ti ti-clock" style={{ verticalAlign: '-2px', marginRight: 6, color: C.primary }} />{e.time}</span>
                 <span><i className="ti ti-map-pin" style={{ verticalAlign: '-2px', marginRight: 6, color: C.primary }} />{e.place}</span>
@@ -279,37 +303,39 @@ export default function Agenda() {
 /* ---------- New-event form ---------- */
 
 function EventForm({
-  date, onCreate, onCancel, authorId, leadAteliers,
+  date, onCreate, onCancel, authorId, targets,
 }: {
   date: string
   onCreate: (e: Omit<AgendaEvent, 'id'>) => void
   onCancel: () => void
   authorId: string
-  /** When set, the form is scoped to a chef/suppléant's own ateliers. */
-  leadAteliers?: Atelier[]
+  /** When set, the form is scoped to what a worker may create (their ateliers
+   * and/or CVS pre-meetings + CVS). Undefined = admin full form. */
+  targets?: EventTarget[]
 }) {
   const groups = useAppStore((s) => s.groups)
-  const ateliers = useAppStore((s) => s.ateliers)
-  const isLead = leadAteliers !== undefined
+  const scoped = targets !== undefined
 
   const [title, setTitle] = useState('')
   const [time, setTime] = useState('14h00')
   const [place, setPlace] = useState('')
-  const [type, setType] = useState<EventType>(isLead ? 'Atelier' : 'CVS')
+  const [type, setType] = useState<EventType>('CVS')
   const [groupIds, setGroupIds] = useState<string[]>([])
-  const [atelierId, setAtelierId] = useState<string>(leadAteliers?.[0]?.id ?? '')
+  const [targetId, setTargetId] = useState<string>(targets?.[0]?.id ?? '')
 
   const toggle = (id: string) =>
     setGroupIds((g) => (g.includes(id) ? g.filter((x) => x !== id) : [...g, id]))
 
+  const selectedTarget = targets?.find((t) => t.id === targetId)
+
   const submit = () => {
     if (!title.trim()) return
-    if (isLead) {
-      const atelier = ateliers.find((a) => a.id === atelierId)
-      if (!atelier) return
+    if (scoped) {
+      if (!selectedTarget) return
       onCreate({
-        date, time, place: place.trim() || atelier.name, title: title.trim(),
-        type: 'Atelier', personIds: atelier.memberIds, groupIds: [], authorId,
+        date, time, place: place.trim() || 'À définir', title: title.trim(),
+        type: selectedTarget.type, personIds: selectedTarget.recipientIds, groupIds: [], authorId,
+        atelierId: selectedTarget.atelierId,
       })
     } else {
       onCreate({ date, time, place: place.trim() || 'À définir', title: title.trim(), type, personIds: [], groupIds, authorId })
@@ -321,38 +347,36 @@ function EventForm({
     border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
   }
 
-  const selectedAtelier = leadAteliers?.find((a) => a.id === atelierId)
-
   return (
     <Card style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, border: `2px solid ${C.primary}` }}>
       <div style={{ fontSize: 17, fontWeight: 600, color: C.ink }}>
-        {isLead ? 'Réunion de mon atelier' : 'Nouvelle réunion'} · {date.split('-').reverse().join('/')}
+        {scoped ? 'Organiser une réunion' : 'Nouvelle réunion'} · {date.split('-').reverse().join('/')}
       </div>
 
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre de la réunion" aria-label="Titre" style={field} />
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={selectedTarget?.titlePlaceholder ?? 'Titre de la réunion'} aria-label="Titre" style={field} />
 
       <div style={{ display: 'flex', gap: 8 }}>
         <input value={time} onChange={(e) => setTime(e.target.value)} placeholder="Heure" aria-label="Heure" style={{ ...field, width: 110 }} />
         <input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Lieu" aria-label="Lieu" style={field} />
       </div>
 
-      {isLead ? (
+      {scoped ? (
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, margin: '2px 0 8px', textTransform: 'uppercase' }}>Atelier concerné</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, margin: '2px 0 8px', textTransform: 'uppercase' }}>Type de réunion</div>
           <select
-            value={atelierId}
-            onChange={(e) => setAtelierId(e.target.value)}
-            aria-label="Atelier concerné"
+            value={targetId}
+            onChange={(e) => setTargetId(e.target.value)}
+            aria-label="Type de réunion"
             style={{ ...field, fontWeight: 600, cursor: 'pointer', background: '#fff' }}
           >
-            {leadAteliers!.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+            {targets!.map((t) => (
+              <option key={t.id} value={t.id}>{t.label}</option>
             ))}
           </select>
-          {selectedAtelier && (
+          {selectedTarget && (
             <div style={{ marginTop: 8, fontSize: 14, color: C.primary, fontWeight: 600 }}>
               <i className="ti ti-users" style={{ verticalAlign: '-2px', marginRight: 6 }} />
-              {selectedAtelier.memberIds.length} membre(s) prévenu(s)
+              {selectedTarget.recipientIds.length} personne(s) prévenue(s)
             </div>
           )}
         </div>

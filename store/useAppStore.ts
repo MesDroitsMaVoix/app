@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { loadAll, persistUpsert, persistDelete } from '@/app/actions'
+import { bootstrap, signIn, signOut, loadData, persistUpsert, persistDelete } from '@/app/actions'
 
 export type Role = 'admin' | 'travailleur'
 
@@ -27,6 +27,10 @@ export interface Person {
   initials: string
   atelier: string
   kind: PersonKind
+  /** Optional profile photo (public URL or data URL). */
+  photoUrl?: string
+  /** Optional role/function within the ESAT (e.g. "Cuisinier"). */
+  fonction?: string
 }
 
 export interface Group {
@@ -36,6 +40,50 @@ export interface Group {
   memberIds: string[]
   /** Ateliers included in the group — they expand to their own members. */
   atelierIds: string[]
+  /** Marks the special, always-present CVS group (Conseil de la Vie Sociale). */
+  cvs?: boolean
+  /** CVS délégués — may create CVS pre-meetings and convene the CVS. */
+  delegateIds?: string[]
+  /** CVS suppléants — same CVS rights as délégués. */
+  suppleantIds?: string[]
+}
+
+export const CVS_GROUP_ID = 'g-cvs'
+
+function makeCvsGroup(): Group {
+  return {
+    id: CVS_GROUP_ID,
+    name: 'Conseil de la Vie Sociale (CVS)',
+    memberIds: [],
+    atelierIds: [],
+    cvs: true,
+    delegateIds: [],
+    suppleantIds: [],
+  }
+}
+
+/** Ensure the special CVS group is always present. */
+function withCvsGroup(groups: Group[]): Group[] {
+  return groups.some((g) => g.cvs) ? groups : [makeCvsGroup(), ...groups]
+}
+
+/** The CVS group, if present. */
+export function cvsGroup(groups: Group[]): Group | undefined {
+  return groups.find((g) => g.cvs)
+}
+
+/** All people taking part in the CVS (délégués + suppléants). */
+export function cvsMemberIds(groups: Group[]): string[] {
+  const g = cvsGroup(groups)
+  if (!g) return []
+  return [...new Set([...(g.delegateIds ?? []), ...(g.suppleantIds ?? [])])]
+}
+
+/** Is the person a CVS délégué or suppléant? */
+export function isCvsDelegate(personId: string, groups: Group[]): boolean {
+  const g = cvsGroup(groups)
+  if (!g) return false
+  return (g.delegateIds ?? []).includes(personId) || (g.suppleantIds ?? []).includes(personId)
 }
 
 /* ---------- Ateliers ---------- */
@@ -80,6 +128,8 @@ export interface AgendaEvent {
   groupIds: string[]
   /** Person id of the creator (a chef/suppléant for atelier meetings they add). */
   authorId?: string
+  /** Atelier this meeting belongs to (set for atelier meetings). */
+  atelierId?: string
 }
 
 /* The currently signed-in travailleur (for "mon agenda") */
@@ -128,6 +178,13 @@ export interface Report {
   authorId?: string
   /** Atelier this report is about (set when written by a chef/suppléant). */
   atelierId?: string
+  /** True when written by a CVS délégué/suppléant (compte rendu du CVS). */
+  cvs?: boolean
+  /** Human label of what the report is about, for non-atelier contexts
+   * (e.g. "Conseil de la Vie Sociale (CVS)", "Préréunion CVS"). */
+  contextLabel?: string
+  /** Epoch ms when the report was written. */
+  createdAt?: number
 }
 
 /* ---------- Messaging ---------- */
@@ -185,6 +242,8 @@ export interface AppNotification {
   recipientIds: string[]
   /** Person ids who have already read it. */
   readBy: string[]
+  /** Person ids who cleared/dismissed it from their box. */
+  dismissedBy?: string[]
   /** Page opened when the notification is clicked. */
   page?: PageId
   /** For message notifications: the conversation to open. Also used to coalesce
@@ -197,8 +256,11 @@ export interface Account {
   name: string
   initials: string
   role: Role
-  /** 4-digit access code. null = not chosen yet (defined on first login). */
-  code: string | null
+  /** 4-digit access code. Present only in demo mode / on the server; stripped
+   * before reaching the browser when Supabase is configured. */
+  code?: string | null
+  /** Whether a code has been set (sent to the client instead of the code). */
+  hasCode?: boolean
   /** Link to the people directory (for agenda / messaging). */
   personId?: string
 }
@@ -239,7 +301,11 @@ interface AppState {
 
   /** Load data from Supabase (or stay in demo mode if not configured). */
   hydrate: () => Promise<void>
+  /** Re-fetch all data from the database (polling refresh). */
+  refresh: () => Promise<void>
 
+  /** Verify a code server-side and open a session (configured mode). */
+  signInAccount: (accountId: string, code: string) => Promise<{ ok: boolean; error?: string }>
   login: (accountId: string) => void
   logout: () => void
   changeCode: (accountId: string, code: string) => void
@@ -250,17 +316,24 @@ interface AppState {
   closeNotif: () => void
   /** Mark every notification addressed to this person as read. */
   markNotificationsRead: (personId: string) => void
+  /** Clear (dismiss) all of a person's notifications from their box. */
+  clearNotifications: (personId: string) => void
 
   // personnel management — addPerson also creates a login account and
   // returns its randomly generated first-login code.
   addPerson: (p: Omit<Person, 'id' | 'initials'>) => string
   deletePerson: (id: string) => void
+  /** Update profile fields of a person (photo, fonction, name…). */
+  updatePerson: (id: string, patch: Partial<Person>) => void
 
   // group management
   createGroup: (name: string) => void
   deleteGroup: (id: string) => void
   toggleGroupMember: (groupId: string, personId: string) => void
   toggleGroupAtelier: (groupId: string, atelierId: string) => void
+  // CVS council membership
+  toggleCvsDelegate: (personId: string) => void
+  toggleCvsSuppleant: (personId: string) => void
 
   // atelier management. createAtelier optionally sets a chef (used when a
   // chef d'atelier creates one of their own ateliers).
@@ -301,7 +374,7 @@ const PEOPLE: Person[] = [
 
 const ATELIERS: Atelier[] = []
 
-const GROUPS: Group[] = []
+const GROUPS: Group[] = [makeCvsGroup()]
 
 const EVENTS: AgendaEvent[] = []
 
@@ -335,10 +408,23 @@ const ACCOUNTS: Account[] = [
 /** Collections that are mirrored to the database, by store key = table name. */
 const SYNC_TABLES = ['accounts', 'people', 'ateliers', 'groups', 'events', 'reports', 'conversations', 'notifications'] as const
 
-/** Wrap an item as a database document row (id + JSON payload). */
-function rowOf(item: { id: string | number }) {
-  return { id: String(item.id), data: item }
+/** Apply a freshly-loaded set of collections from the database to the store. */
+function applyData(set: (partial: Partial<AppState>) => void, d: Record<string, unknown[]>) {
+  set({
+    people: d.people as Person[],
+    ateliers: d.ateliers as Atelier[],
+    groups: withCvsGroup(d.groups as Group[]),
+    events: d.events as AgendaEvent[],
+    reports: d.reports as Report[],
+    conversations: d.conversations as Conversation[],
+    notifications: (d.notifications ?? []) as AppNotification[],
+    loading: false,
+  })
 }
+
+/** True while applying server data, so the sync subscription doesn't echo it
+ * straight back to the database. */
+let applyingRemote = false
 
 /** Keep an atelier's group conversation aligned with the atelier (name + members). */
 function syncAtelierConv(conversations: Conversation[], atelier: Atelier): Conversation[] {
@@ -392,47 +478,62 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   hydrate: async () => {
     try {
-      const res = await loadAll()
-      if (!res.configured || !res.data) {
-        // Supabase not set up → stay in in-memory demo mode.
+      const res = await bootstrap()
+      if (!res.configured) {
+        // Supabase not set up → stay in in-memory demo mode (seed accounts).
         set({ loading: false })
         return
       }
-      const d = res.data
-      if (Array.isArray(d.accounts) && d.accounts.length > 0) {
-        // Load existing data from the database.
+      if (res.session && res.data) {
+        // Valid session cookie → restore the logged-in user and their data.
+        applyData(set, res.data)
         set({
-          accounts: d.accounts as Account[],
-          people: d.people as Person[],
-          ateliers: d.ateliers as Atelier[],
-          groups: d.groups as Group[],
-          events: d.events as AgendaEvent[],
-          reports: d.reports as Report[],
-          conversations: d.conversations as Conversation[],
-          notifications: (d.notifications ?? []) as AppNotification[],
+          accounts: (res.accounts ?? []) as Account[],
+          currentAccountId: res.session.id,
+          role: (res.session.role as Role) ?? 'travailleur',
+          activePage: 'accueil',
           persist: true,
           loading: false,
         })
+        startSync()
       } else {
-        // Empty database → seed it from the demo data already in the store.
-        const s = get()
-        await Promise.all([
-          persistUpsert('accounts', s.accounts.map(rowOf)),
-          persistUpsert('people', s.people.map(rowOf)),
-          persistUpsert('ateliers', s.ateliers.map(rowOf)),
-          persistUpsert('groups', s.groups.map(rowOf)),
-          persistUpsert('events', s.events.map(rowOf)),
-          persistUpsert('reports', s.reports.map(rowOf)),
-          persistUpsert('conversations', s.conversations.map(rowOf)),
-          persistUpsert('notifications', s.notifications.map(rowOf)),
-        ])
-        set({ persist: true, loading: false })
+        // Configured but not logged in → just the account picker.
+        set({ accounts: (res.accounts ?? []) as Account[], persist: true, loading: false })
       }
-      startSync()
     } catch (err) {
       console.error('[store] hydrate failed, falling back to demo mode:', err)
       set({ loading: false })
     }
+  },
+
+  refresh: async () => {
+    const s = get()
+    if (!s.persist || !s.currentAccountId) return
+    try {
+      const d = await loadData()
+      applyingRemote = true
+      applyData(set, d)
+      set({ accounts: d.accounts as Account[] })
+      applyingRemote = false
+    } catch (err) {
+      applyingRemote = false
+      console.error('[store] refresh failed:', err)
+    }
+  },
+
+  signInAccount: async (accountId, code) => {
+    const res = await signIn(accountId, code)
+    if (!res.ok) return { ok: false, error: res.error }
+    applyData(set, res.data)
+    set({
+      accounts: res.data.accounts as Account[],
+      currentAccountId: res.account.id,
+      role: (res.account.role as Role) ?? 'travailleur',
+      activePage: 'accueil',
+      persist: true,
+    })
+    startSync()
+    return { ok: true }
   },
 
   login: (accountId) =>
@@ -442,7 +543,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { currentAccountId: acc.id, role: acc.role, activePage: 'accueil' }
     }),
 
-  logout: () => set({ currentAccountId: null }),
+  logout: () => {
+    if (get().persist) void signOut().catch(() => {})
+    set({ currentAccountId: null, activePage: 'accueil' })
+  },
 
   changeCode: (accountId, code) =>
     set((s) => ({
@@ -468,6 +572,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       notifications: s.notifications.map((n) =>
         n.recipientIds.includes(personId) && !n.readBy.includes(personId)
           ? { ...n, readBy: [...n.readBy, personId] }
+          : n
+      ),
+    })),
+
+  clearNotifications: (personId) =>
+    set((s) => ({
+      notifications: s.notifications.map((n) =>
+        n.recipientIds.includes(personId) && !(n.dismissedBy ?? []).includes(personId)
+          ? { ...n, dismissedBy: [...(n.dismissedBy ?? []), personId], readBy: n.readBy.includes(personId) ? n.readBy : [...n.readBy, personId] }
           : n
       ),
     })),
@@ -507,6 +620,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }),
 
+  updatePerson: (id, patch) =>
+    set((s) => ({
+      people: s.people.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    })),
+
   createGroup: (name) =>
     set((s) => ({
       groups: [...s.groups, { id: newId('g'), name, memberIds: [], atelierIds: [] }],
@@ -544,6 +662,37 @@ export const useAppStore = create<AppState>((set, get) => ({
             }
           : g
       ),
+    })),
+
+  toggleCvsDelegate: (personId) =>
+    set((s) => ({
+      groups: s.groups.map((g) => {
+        if (!g.cvs) return g
+        const delegates = g.delegateIds ?? []
+        return {
+          ...g,
+          delegateIds: delegates.includes(personId)
+            ? delegates.filter((x) => x !== personId)
+            : [...delegates, personId],
+          // a person can't be délégué and suppléant at the same time
+          suppleantIds: (g.suppleantIds ?? []).filter((x) => x !== personId),
+        }
+      }),
+    })),
+
+  toggleCvsSuppleant: (personId) =>
+    set((s) => ({
+      groups: s.groups.map((g) => {
+        if (!g.cvs) return g
+        const supp = g.suppleantIds ?? []
+        return {
+          ...g,
+          suppleantIds: supp.includes(personId)
+            ? supp.filter((x) => x !== personId)
+            : [...supp, personId],
+          delegateIds: (g.delegateIds ?? []).filter((x) => x !== personId),
+        }
+      }),
     })),
 
   createAtelier: (name, chefId = null) =>
@@ -733,7 +882,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const existing = notifications.find((n) => n.convId === conv.id)
         if (existing) {
           notifications = notifications.map((n) =>
-            n.id === existing.id ? { ...n, text: notifText, createdAt: now, recipientIds: recipients, readBy: [] } : n
+            n.id === existing.id ? { ...n, text: notifText, createdAt: now, recipientIds: recipients, readBy: [], dismissedBy: [] } : n
           )
         } else {
           notifications = [
@@ -819,6 +968,8 @@ function startSync() {
 
   useAppStore.subscribe((state) => {
     if (!state.persist) return
+    // Data just loaded from the server — don't echo it back.
+    if (applyingRemote) { prev = snapshot(state); return }
     for (const table of SYNC_TABLES) {
       if (disabled.has(table)) continue
       const current = state[table] as { id: string | number }[]
@@ -850,6 +1001,8 @@ function startSync() {
  * every atelier the group includes. */
 export function groupPersonIds(group: Group, ateliers: Atelier[]): string[] {
   const ids = new Set(group.memberIds)
+  group.delegateIds?.forEach((id) => ids.add(id))
+  group.suppleantIds?.forEach((id) => ids.add(id))
   group.atelierIds.forEach((aid) => {
     ateliers.find((a) => a.id === aid)?.memberIds.forEach((m) => ids.add(m))
   })

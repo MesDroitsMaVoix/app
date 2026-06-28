@@ -29,7 +29,7 @@ function timeAgo(ts: number): string {
 export default function Topbar() {
   const {
     activePage, role, notifOpen, logout, toggleNotif, setPage,
-    notifications, accounts, currentAccountId, markNotificationsRead, setConversation,
+    notifications, accounts, currentAccountId, markNotificationsRead, clearNotifications, setConversation,
   } = useAppStore()
   const roleLabel = role === 'admin' ? 'Administrateur' : 'Travailleur'
   const title =
@@ -40,7 +40,7 @@ export default function Topbar() {
   // Notifications addressed to the current user, most recent first.
   const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? ''
   const myNotifications = notifications
-    .filter((n) => n.recipientIds.includes(viewerId))
+    .filter((n) => n.recipientIds.includes(viewerId) && !(n.dismissedBy ?? []).includes(viewerId))
     .sort((a, b) => b.createdAt - a.createdAt)
   const unreadCount = myNotifications.filter((n) => !n.readBy.includes(viewerId)).length
 
@@ -115,8 +115,16 @@ export default function Topbar() {
               zIndex: 100, boxShadow: '0 8px 28px rgba(30,41,59,0.12)',
               maxHeight: '420px', overflowY: 'auto',
             }}>
-              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.line}`, fontSize: '13px', fontWeight: 600, color: C.ink }}>
-                Notifications
+              <div style={{ padding: '10px 12px 10px 16px', borderBottom: `1px solid ${C.line}`, fontSize: '13px', fontWeight: 600, color: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span>Notifications</span>
+                {myNotifications.length > 0 && (
+                  <button
+                    onClick={() => clearNotifications(viewerId)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: 'none', cursor: 'pointer', color: C.sub, fontSize: 12, fontWeight: 600, padding: '4px 6px', borderRadius: 8 }}
+                  >
+                    <i className="ti ti-trash" style={{ fontSize: 15 }} /> Tout effacer
+                  </button>
+                )}
               </div>
               {myNotifications.length === 0 ? (
                 <div style={{ padding: '24px 16px', textAlign: 'center', color: C.sub, fontSize: 14 }}>

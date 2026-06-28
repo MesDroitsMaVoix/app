@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAppStore, PersonKind } from '@/store/useAppStore'
+import { useAppStore, PersonKind, cvsGroup } from '@/store/useAppStore'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 
 const KIND_LABEL: Record<PersonKind, string> = {
@@ -24,6 +24,7 @@ export default function GestionPersonnel() {
   const [showAddPerson, setShowAddPerson] = useState(false)
   const [pName, setPName] = useState('')
   const [pKind, setPKind] = useState<PersonKind>('travailleur')
+  const [pFonction, setPFonction] = useState('')
 
   // delete confirmation
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null)
@@ -41,8 +42,8 @@ export default function GestionPersonnel() {
   const handleAddPerson = () => {
     const name = pName.trim()
     if (!name) return
-    const code = addPerson({ name, atelier: 'Non précisé', kind: pKind })
-    setPName(''); setPKind('travailleur'); setShowAddPerson(false)
+    const code = addPerson({ name, atelier: 'Non précisé', kind: pKind, fonction: pFonction.trim() || undefined })
+    setPName(''); setPKind('travailleur'); setPFonction(''); setShowAddPerson(false)
     setNewAccount({ name, code })
   }
 
@@ -57,6 +58,8 @@ export default function GestionPersonnel() {
       />
 
       <AteliersSection />
+
+      <CvsSection />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
         {/* ---------- Groups ---------- */}
@@ -89,7 +92,7 @@ export default function GestionPersonnel() {
           </Card>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {groups.map((g) => {
+            {groups.filter((g) => !g.cvs).map((g) => {
               const isOpen = openGroupId === g.id
               return (
                 <Card key={g.id} style={{ padding: 0, overflow: 'hidden' }}>
@@ -273,6 +276,14 @@ export default function GestionPersonnel() {
                   </button>
                 ))}
               </div>
+              <input
+                value={pFonction}
+                onChange={(e) => setPFonction(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddPerson() }}
+                placeholder="Fonction dans l'ESAT (optionnel)"
+                aria-label="Fonction dans l'ESAT"
+                style={personField}
+              />
               <button
                 onClick={handleAddPerson}
                 style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 10, padding: 13, fontSize: 16, fontWeight: 600, cursor: 'pointer' }}
@@ -288,9 +299,12 @@ export default function GestionPersonnel() {
                 display: 'flex', alignItems: 'center', gap: 12,
                 padding: '12px 12px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
               }}>
-                <Avatar initials={p.initials} />
+                <Avatar initials={p.initials} src={p.photoUrl} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>{p.name}</div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>
+                    {p.name}
+                    {p.fonction && <span style={{ fontSize: 13, fontWeight: 500, color: C.sub }}> · {p.fonction}</span>}
+                  </div>
                   {(() => {
                     const memberOf = groups.filter((g) => g.memberIds.includes(p.id))
                     if (memberOf.length === 0) {
@@ -667,6 +681,47 @@ function AteliersSection() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ---------- CVS council (délégués + suppléants) ---------- */
+
+function CvsSection() {
+  const { people, groups, toggleCvsDelegate, toggleCvsSuppleant } = useAppStore()
+  const cvs = cvsGroup(groups)
+  const workers = people.filter((p) => p.kind !== 'admin')
+  if (!cvs) return null
+
+  const delegates = cvs.delegateIds ?? []
+  const suppleants = cvs.suppleantIds ?? []
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <h3 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: '0 0 14px' }}>
+        Conseil de la Vie Sociale (CVS)
+      </h3>
+      <Card style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 46, height: 46, borderRadius: 12, background: C.light, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <i className="ti ti-gavel" style={{ fontSize: 24, color: C.primary }} />
+          </div>
+          <div style={{ fontSize: 14, color: C.sub, lineHeight: 1.5 }}>
+            Désignez les <strong style={{ color: C.ink }}>délégués</strong> et <strong style={{ color: C.ink }}>suppléants</strong> du CVS.
+            Ils pourront organiser les préréunions de préparation et convoquer le CVS depuis l&apos;agenda.
+          </div>
+        </div>
+
+        <div>
+          <div style={subHeading}>Délégués CVS ({delegates.length})</div>
+          <PersonToggleGrid workers={workers} selected={delegates} onToggle={(pid) => toggleCvsDelegate(pid)} />
+        </div>
+
+        <div>
+          <div style={subHeading}>Suppléants CVS ({suppleants.length})</div>
+          <PersonToggleGrid workers={workers} selected={suppleants} onToggle={(pid) => toggleCvsSuppleant(pid)} />
+        </div>
+      </Card>
     </div>
   )
 }

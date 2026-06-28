@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { C, PageIntro, Card } from '@/components/ui'
+import { C, PageIntro, Card, ReadAloud } from '@/components/ui'
 
 interface Droit {
   icon: string
@@ -78,11 +78,17 @@ export default function Droits() {
 
   return (
     <div style={{ maxWidth: 1180 }}>
-      <PageIntro
-        icon="ti-book-2"
-        title="Mes droits"
-        text="Voici vos droits, expliqués avec des mots simples. Cliquez sur une carte pour en savoir plus."
-      />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <PageIntro
+          icon="ti-book-2"
+          title="Mes droits"
+          text="Voici vos droits, expliqués avec des mots simples. Cliquez sur une carte pour en savoir plus."
+        />
+        <ReadAloud
+          label="Lire mes droits"
+          getText={() => DROITS.map((d) => `${d.title}. ${d.short} ${d.details.join('. ')}`).join('. ')}
+        />
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(520px, 1fr))', gap: 14, alignItems: 'start' }}>
         {DROITS.map((d, i) => {

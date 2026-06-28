@@ -17,6 +17,49 @@ export const C = {
   bg: '#F8FAFC',           // brume — fonds de page
 }
 
+/* Read-aloud button (text-to-speech via the browser's Web Speech API).
+ * `getText` is called on click so the latest content is read. */
+export function ReadAloud({ getText, label = 'Lire à haute voix' }: { getText: () => string; label?: string }) {
+  const [speaking, setSpeaking] = React.useState(false)
+  const [supported, setSupported] = React.useState(true)
+
+  React.useEffect(() => {
+    setSupported(typeof window !== 'undefined' && 'speechSynthesis' in window)
+    return () => { if (typeof window !== 'undefined') window.speechSynthesis?.cancel() }
+  }, [])
+
+  if (!supported) return null
+
+  const toggle = () => {
+    const synth = window.speechSynthesis
+    if (speaking) { synth.cancel(); setSpeaking(false); return }
+    synth.cancel()
+    const u = new SpeechSynthesisUtterance(getText())
+    u.lang = 'fr-FR'
+    u.rate = 0.95
+    u.onend = () => setSpeaking(false)
+    u.onerror = () => setSpeaking(false)
+    setSpeaking(true)
+    synth.speak(u)
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      aria-label={speaking ? 'Arrêter la lecture' : label}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
+        padding: '10px 16px', borderRadius: 999, cursor: 'pointer', fontSize: 15, fontWeight: 600,
+        border: `1px solid ${speaking ? C.primary : C.line}`,
+        background: speaking ? C.primary : '#fff', color: speaking ? '#fff' : C.primaryDark,
+      }}
+    >
+      <i className={`ti ${speaking ? 'ti-player-stop-filled' : 'ti-volume'}`} style={{ fontSize: 20 }} />
+      {speaking ? 'Arrêter' : label}
+    </button>
+  )
+}
+
 /* Big readable page intro */
 export function PageIntro({ icon, title, text }: { icon: string; title: string; text: string }) {
   return (
@@ -61,8 +104,17 @@ function avatarColor(initials: string): string {
   return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
-/* Colored avatar with initials */
-export function Avatar({ initials, size = 48 }: { initials: string; size?: number }) {
+/* Colored avatar with initials, or a profile photo when `src` is provided. */
+export function Avatar({ initials, size = 48, src }: { initials: string; size?: number; src?: string }) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={initials}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, background: C.line }}
+      />
+    )
+  }
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',

@@ -21,11 +21,11 @@ function isWorkingHours(ts: number): boolean {
 
 /** Title/avatar of a conversation as seen by the viewer (the *other* person for
  * a direct chat, the atelier name for a group). */
-function convDisplay(c: Conversation, viewerId: string, people: Person[]): { name: string; initials: string; isGroup: boolean } {
+function convDisplay(c: Conversation, viewerId: string, people: Person[]): { name: string; initials: string; isGroup: boolean; photoUrl?: string } {
   if (c.atelierId) return { name: c.name, initials: c.initials, isGroup: true }
   const otherId = (c.participantIds ?? []).find((id) => id !== viewerId)
   const other = people.find((p) => p.id === otherId)
-  return { name: other?.name ?? c.name, initials: other?.initials ?? c.initials, isGroup: false }
+  return { name: other?.name ?? c.name, initials: other?.initials ?? c.initials, isGroup: false, photoUrl: other?.photoUrl }
 }
 
 export default function Messagerie() {
@@ -55,6 +55,7 @@ export default function Messagerie() {
   const active = visibleConversations.find((c) => c.id === activeConversationId) ?? visibleConversations[0]
   const personName = (id: string) => people.find((p) => p.id === id)?.name ?? 'Inconnu'
   const personInitials = (id: string) => people.find((p) => p.id === id)?.initials ?? '?'
+  const personPhoto = (id: string) => people.find((p) => p.id === id)?.photoUrl
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -115,7 +116,7 @@ export default function Messagerie() {
                 }}
               >
                 <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <Avatar initials={disp.initials} size={44} />
+                  <Avatar initials={disp.initials} size={44} src={disp.photoUrl} />
                   {unread && (
                     <span style={{
                       position: 'absolute', top: -2, right: -2, width: 13, height: 13,
@@ -163,7 +164,7 @@ export default function Messagerie() {
           return (
             <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.line}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Avatar initials={disp.initials} size={44} />
+                <Avatar initials={disp.initials} size={44} src={disp.photoUrl} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {disp.isGroup && <i className="ti ti-users" style={{ fontSize: 16, color: C.sub }} />}
@@ -184,7 +185,7 @@ export default function Messagerie() {
                       background: C.bg, border: `1px solid ${C.line}`, borderRadius: 999,
                       padding: '4px 12px 4px 4px', fontSize: 13, color: C.ink,
                     }}>
-                      <Avatar initials={personInitials(mid)} size={22} />
+                      <Avatar initials={personInitials(mid)} size={22} src={personPhoto(mid)} />
                       {personName(mid)}{mid === viewerId ? ' (vous)' : ''}
                     </span>
                   ))}
@@ -362,7 +363,7 @@ export default function Messagerie() {
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = C.bg }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                   >
-                    <Avatar initials={p.initials} />
+                    <Avatar initials={p.initials} src={p.photoUrl} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>{p.name}</div>
                       <div style={{ fontSize: 14, color: C.sub }}>{p.atelier}</div>

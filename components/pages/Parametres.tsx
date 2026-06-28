@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useAppStore } from '@/store/useAppStore'
+import { uploadAttachment } from '@/app/actions'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 
 const ROLE_LABEL = {
@@ -11,13 +12,26 @@ const ROLE_LABEL = {
 
 const onlyDigits = (v: string) => v.replace(/\D/g, '').slice(0, 4)
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(r.result as string)
+    r.onerror = reject
+    r.readAsDataURL(file)
+  })
+}
+
 export default function Parametres() {
-  const { accounts, currentAccountId, changeCode } = useAppStore()
+  const { accounts, currentAccountId, people, changeCode, updatePerson, persist } = useAppStore()
   const me = accounts.find((a) => a.id === currentAccountId)
+  const myPerson = people.find((p) => p.id === me?.personId)
 
   const [code, setCode] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [fonction, setFonction] = useState(myPerson?.fonction ?? '')
+  const [photoBusy, setPhotoBusy] = useState(false)
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   if (!me) return null
 
@@ -29,21 +43,84 @@ export default function Parametres() {
     setMessage({ type: 'ok', text: 'Votre code a bien été modifié.' })
   }
 
+  const onPhoto = async (files: FileList | null) => {
+    const file = files?.[0]
+    if (!file || !myPerson) return
+    setPhotoBusy(true)
+    try {
+      let url: string | null = null
+      if (persist) {
+        const fd = new FormData()
+        fd.append('file', file)
+        url = (await uploadAttachment(fd))?.url ?? null
+      }
+      if (!url) url = await fileToDataUrl(file)
+      updatePerson(myPerson.id, { photoUrl: url })
+    } catch {
+      setMessage({ type: 'err', text: "L'envoi de la photo a échoué." })
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  const saveFonction = () => {
+    if (myPerson) updatePerson(myPerson.id, { fonction: fonction.trim() })
+    setMessage({ type: 'ok', text: 'Votre profil a été mis à jour.' })
+  }
+
   return (
     <div style={{ maxWidth: 560 }}>
       <PageIntro
         icon="ti-settings"
         title="Paramètres"
-        text="Gérez votre compte et votre code d'accès."
+        text="Gérez votre profil, votre photo et votre code d'accès."
       />
 
       {/* Profile */}
-      <Card style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-        <Avatar initials={me.initials} size={56} />
-        <div>
-          <div style={{ fontSize: 19, fontWeight: 600, color: C.ink }}>{me.name}</div>
-          <div style={{ fontSize: 15, color: C.primary, fontWeight: 600 }}>{ROLE_LABEL[me.role]}</div>
+      <Card style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ position: 'relative' }}>
+            <Avatar initials={me.initials} size={64} src={myPerson?.photoUrl} />
+            <button
+              onClick={() => fileRef.current?.click()}
+              aria-label="Changer la photo"
+              title="Changer la photo"
+              disabled={photoBusy}
+              style={{
+                position: 'absolute', bottom: -2, right: -2, width: 26, height: 26, borderRadius: '50%',
+                border: '2px solid #fff', background: C.primary, color: '#fff', cursor: photoBusy ? 'wait' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <i className={`ti ${photoBusy ? 'ti-loader-2' : 'ti-camera'}`} style={{ fontSize: 14 }} />
+            </button>
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" onChange={(e) => { onPhoto(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 19, fontWeight: 600, color: C.ink }}>{me.name}</div>
+            <div style={{ fontSize: 15, color: C.primary, fontWeight: 600 }}>{ROLE_LABEL[me.role]}</div>
+            {myPerson?.fonction && <div style={{ fontSize: 14, color: C.sub }}>{myPerson.fonction}</div>}
+          </div>
         </div>
+
+        {myPerson && (
+          <div style={{ marginTop: 18, borderTop: `1px solid ${C.line}`, paddingTop: 16 }}>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
+              Ma fonction dans l&apos;ESAT (optionnel)
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={fonction}
+                onChange={(e) => setFonction(e.target.value)}
+                placeholder="Ex : Cuisinier, Agent d'entretien…"
+                style={{ flex: 1, padding: '11px 13px', fontSize: 15, borderRadius: 10, border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit' }}
+              />
+              <button onClick={saveFonction} style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 10, padding: '0 18px', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Change code */}

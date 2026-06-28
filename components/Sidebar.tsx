@@ -39,7 +39,7 @@ function LogoMark() {
 }
 
 export default function Sidebar() {
-  const { activePage, role, accounts, currentAccountId, conversations, setPage } = useAppStore()
+  const { activePage, role, accounts, currentAccountId, people, conversations, setPage } = useAppStore()
   const NAV_ITEMS = navItems(role)
 
   const me = accounts.find((a) => a.id === currentAccountId)
@@ -49,6 +49,7 @@ export default function Sidebar() {
 
   // Unread-messages indicator for the Messagerie tab.
   const viewerId = me?.personId ?? ''
+  const myPhoto = people.find((p) => p.id === viewerId)?.photoUrl
   const hasUnreadMessages = conversations.some(
     (c) => conversationParticipants(c).includes(viewerId) && isConversationUnread(c, viewerId)
   )
@@ -125,14 +126,18 @@ export default function Sidebar() {
         padding: 12, borderRadius: 12,
         background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', boxSizing: 'border-box',
       }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: '50%',
-          background: C.primary, color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 15, fontWeight: 700, flexShrink: 0,
-        }}>
-          {initials}
-        </div>
+        {myPhoto ? (
+          <img src={myPhoto} alt={initials} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+        ) : (
+          <div style={{
+            width: 40, height: 40, borderRadius: '50%',
+            background: C.primary, color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 15, fontWeight: 700, flexShrink: 0,
+          }}>
+            {initials}
+          </div>
+        )}
         <div>
           <div style={{ fontSize: 14, color: '#fff', fontWeight: 600 }}>{name}</div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{roleLabel}</div>

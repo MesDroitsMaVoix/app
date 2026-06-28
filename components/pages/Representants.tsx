@@ -1,45 +1,38 @@
 'use client'
 
-import { useAppStore } from '@/store/useAppStore'
+import { useAppStore, cvsGroup } from '@/store/useAppStore'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 
-interface Rep {
-  convId: number | null
-  initials: string
-  name: string
-  role: string
-  instance: string
-  helps: string
-}
+type Contact = { personId: string; name: string; initials: string; role: string; helps: string; icon: string; photoUrl?: string; fonction?: string }
 
-const REPS: Rep[] = [
-  {
-    convId: 1, initials: 'ML', name: 'Marie L.', role: 'Déléguée CVS',
-    instance: 'Conseil de la Vie Sociale',
-    helps: 'Pour parler de la vie dans l\'ESAT : repas, sorties, sécurité, idées.',
-  },
-  {
-    convId: 2, initials: 'KB', name: 'Karim B.', role: 'Délégué des travailleurs',
-    instance: 'Délégués auprès de la direction',
-    helps: 'Pour porter vos questions et vos demandes à la direction.',
-  },
-  {
-    convId: 3, initials: 'SV', name: 'Sophie V.', role: 'Accompagnatrice',
-    instance: 'Équipe d\'accompagnement',
-    helps: 'Pour être aidé au quotidien et comprendre vos droits.',
-  },
-  {
-    convId: null, initials: 'TD', name: 'Thomas D.', role: 'Chef d\'atelier',
-    instance: 'Atelier Conditionnement',
-    helps: 'Pour les questions sur votre travail et votre atelier.',
-  },
-]
+const HELP_CVS = "Pour la vie dans l'ESAT : repas, sorties, sécurité et vos idées portées au CVS."
+const HELP_ADMIN = "Pour vos questions, vos droits et l'organisation de l'établissement."
 
 export default function Representants() {
-  const { setPage, setConversation } = useAppStore()
+  const { people, groups, accounts, currentAccountId, setPage, startConversation } = useAppStore()
+  const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? ''
 
-  const contact = (convId: number) => {
-    setConversation(convId)
+  const personById = (id: string) => people.find((p) => p.id === id)
+  const cvs = cvsGroup(groups)
+
+  // Build the contact list: CVS délégués, suppléants, then administrateurs.
+  const contacts: Contact[] = []
+  const seen = new Set<string>()
+  const add = (id: string, role: string, helps: string, icon: string) => {
+    const p = personById(id)
+    if (!p || seen.has(id)) return
+    seen.add(id)
+    contacts.push({ personId: id, name: p.name, initials: p.initials, role, helps, icon, photoUrl: p.photoUrl, fonction: p.fonction })
+  }
+  cvs?.delegateIds?.forEach((id) => add(id, 'Délégué·e CVS', HELP_CVS, 'ti-gavel'))
+  cvs?.suppleantIds?.forEach((id) => add(id, 'Suppléant·e CVS', HELP_CVS, 'ti-gavel'))
+  people.filter((p) => p.kind === 'admin').forEach((p) => add(p.id, 'Administrateur', HELP_ADMIN, 'ti-user-shield'))
+
+  // Don't list the viewer as their own contact.
+  const visible = contacts.filter((c) => c.personId !== viewerId)
+
+  const write = (c: Contact) => {
+    startConversation({ id: c.personId, name: c.name, initials: c.initials, role: c.role }, viewerId)
     setPage('messagerie')
   }
 
@@ -51,23 +44,30 @@ export default function Representants() {
         text="Voici les personnes qui vous représentent et qui peuvent vous aider. Vous pouvez leur écrire."
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 16 }}>
-        {REPS.map((r, i) => (
-          <Card key={i} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <Avatar initials={r.initials} size={56} />
-              <div>
-                <div style={{ fontSize: 19, fontWeight: 600, color: C.ink }}>{r.name}</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: C.primary }}>{r.role}</div>
-                <div style={{ fontSize: 14, color: C.sub }}>{r.instance}</div>
+      {visible.length === 0 ? (
+        <Card style={{ textAlign: 'center', color: C.sub, padding: 30 }}>
+          Aucun représentant désigné pour l&apos;instant.
+        </Card>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 16 }}>
+          {visible.map((c) => (
+            <Card key={c.personId} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <Avatar initials={c.initials} size={56} src={c.photoUrl} />
+                <div>
+                  <div style={{ fontSize: 19, fontWeight: 600, color: C.ink }}>{c.name}</div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 600, color: C.primary }}>
+                    <i className={`ti ${c.icon}`} style={{ fontSize: 16 }} />
+                    {c.role}
+                  </div>
+                  {c.fonction && <div style={{ fontSize: 14, color: C.sub }}>{c.fonction}</div>}
+                </div>
               </div>
-            </div>
 
-            <p style={{ fontSize: 16, color: C.ink, margin: 0, lineHeight: 1.5 }}>{r.helps}</p>
+              <p style={{ fontSize: 16, color: C.ink, margin: 0, lineHeight: 1.5 }}>{c.helps}</p>
 
-            {r.convId !== null && (
               <button
-                onClick={() => contact(r.convId!)}
+                onClick={() => write(c)}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   background: C.primary, color: '#fff', border: 'none', borderRadius: 12,
@@ -76,10 +76,10 @@ export default function Representants() {
               >
                 <i className="ti ti-message-2" style={{ fontSize: 20 }} /> Écrire un message
               </button>
-            )}
-          </Card>
-        ))}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
