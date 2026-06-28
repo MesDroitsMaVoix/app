@@ -14,7 +14,10 @@
 html, body {
   height: 100%;
   width: 100%;
+  max-width: 100%;
   overflow: hidden;
+  /* Block left/right swipe (incl. browser back-swipe) — only vertical scroll. */
+  overscroll-behavior-x: none;
   font-family: var(--font-main);
   background: #F8FAFC;
 }

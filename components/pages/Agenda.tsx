@@ -123,7 +123,7 @@ export default function Agenda() {
           ))}
         </div>
 
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: isMobile ? '54px' : '1fr' }}>
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: isMobile ? 'minmax(56px, auto)' : '1fr' }}>
           {cells.map((day, i) => {
             if (day === null) {
               return <div key={i} style={{ borderRight: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`, background: '#fcfcfb' }} />
@@ -139,7 +139,7 @@ export default function Agenda() {
                 style={{
                   position: 'relative', textAlign: 'left', cursor: 'pointer', border: 'none',
                   borderRight: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`,
-                  background: isSelected ? C.light : '#fff', padding: 8, minHeight: 78,
+                  background: isSelected ? C.light : '#fff', padding: 8, minHeight: isMobile ? 56 : 78,
                   display: 'flex', flexDirection: 'column', gap: 4,
                   outline: isSelected ? `2px solid ${C.primary}` : 'none', outlineOffset: -2,
                 }}

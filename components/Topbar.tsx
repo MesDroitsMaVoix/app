@@ -79,13 +79,18 @@ export default function Topbar() {
       minHeight: '68px',
     }}>
       {isMobile ? (
-        /* On mobile the title is shown by the page itself + the bottom nav,
-         * so the header carries the brand instead (logo + name). */
-        <img
-          src="/logo_portevoix_horizontal.svg"
-          alt="Mes Droits, Ma Voix"
-          style={{ height: 38, width: 'auto', flexShrink: 1, minWidth: 0, objectFit: 'contain' }}
-        />
+        /* On mobile the title is shown by the page itself + the bottom nav, so the
+         * header just carries the brand mark (the megaphone, no tiny text). */
+        <svg viewBox="-66 -40 137 93" role="img" aria-label="Mes Droits, Ma Voix"
+          style={{ height: 46, width: 'auto', flexShrink: 0 }} xmlns="http://www.w3.org/2000/svg">
+          <path d="M-50,-21 L9,-38 a9,9 0 0 1 11,9 V29 a9,9 0 0 1 -11,9 L-50,21 Z" fill="#FF6B5E" />
+          <rect x="-64" y="-21" width="16" height="42" rx="7" fill="#1E293B" />
+          <path d="M-35,24 v16 a11,11 0 0 0 18,0 v-9 Z" fill="#FF6B5E" />
+          <g stroke="#16A34A" strokeWidth="5.5" strokeLinecap="round" fill="none">
+            <path d="M33,-24 q13,4 13,24" />
+            <path d="M45,-37 q24,9 24,37" />
+          </g>
+        </svg>
       ) : (
         <h1 style={{
           fontFamily: 'var(--font-display)',

@@ -62,6 +62,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
+          overflowX: 'hidden',
+          overscrollBehaviorX: 'none',
           padding: isMobile ? '16px' : '32px',
           background: '#F8FAFC',
         }}>

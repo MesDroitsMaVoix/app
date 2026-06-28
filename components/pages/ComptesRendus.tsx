@@ -7,6 +7,7 @@ import {
 } from '@/store/useAppStore'
 import { uploadAttachment } from '@/app/actions'
 import { C, PageIntro, Card, Avatar, ReadAloud } from '@/components/ui'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 const TYPE_COLORS: Record<EventType, string> = {
   CVS:         '#FF6B5E',
@@ -18,6 +19,7 @@ const TYPES: EventType[] = ['CVS', 'Atelier', 'Institution', 'Mixte']
 
 export default function ComptesRendus() {
   const { role, reports, groups, people, ateliers, accounts, currentAccountId, addReport, updateReport, deleteReport, validateReport } = useAppStore()
+  const isMobile = useIsMobile()
   const isStaff = canManage(role)
 
   const viewerId = accounts.find((a) => a.id === currentAccountId)?.personId ?? CURRENT_USER_ID
@@ -277,14 +279,17 @@ export default function ComptesRendus() {
   /* ---------- List ---------- */
   return (
     <div style={{ maxWidth: 1180 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: isMobile ? 18 : 0 }}>
         <PageIntro
           icon="ti-file-text"
           title="Comptes rendus"
           text="Lisez ce qui a été dit et décidé lors des réunions. Cliquez sur un compte rendu pour le lire."
         />
         {canCompose && (
-          <button onClick={() => setEditingId('new')} style={primaryBtn}>
+          <button
+            onClick={() => setEditingId('new')}
+            style={isMobile ? { ...primaryBtn, width: '100%', justifyContent: 'center' } : primaryBtn}
+          >
             <i className="ti ti-plus" style={{ fontSize: 20 }} /> Nouveau compte rendu
           </button>
         )}

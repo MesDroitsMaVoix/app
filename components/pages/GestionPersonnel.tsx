@@ -63,7 +63,7 @@ export default function GestionPersonnel() {
 
       <CvsSection />
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
         {/* ---------- Groups ---------- */}
         <div>
           <h3 style={{ fontSize: 20, fontWeight: 600, color: C.ink, margin: '0 0 14px' }}>Groupes</h3>
@@ -78,7 +78,7 @@ export default function GestionPersonnel() {
               placeholder="Nom du nouveau groupe…"
               aria-label="Nom du nouveau groupe"
               style={{
-                flex: 1, padding: '12px 14px', fontSize: 16, borderRadius: 10,
+                flex: 1, minWidth: 0, padding: '12px 14px', fontSize: 16, borderRadius: 10,
                 border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit',
               }}
             />
@@ -86,7 +86,7 @@ export default function GestionPersonnel() {
               onClick={handleCreate}
               style={{
                 background: C.primary, color: '#fff', border: 'none', borderRadius: 10,
-                padding: '12px 18px', fontSize: 16, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                padding: '12px 18px', fontSize: 16, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >
               Créer
@@ -298,11 +298,11 @@ export default function GestionPersonnel() {
           <Card style={{ padding: 8 }}>
             {people.map((p, i) => (
               <div key={p.id} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
+                display: 'flex', alignItems: 'center', gap: 12, flexWrap: isMobile ? 'wrap' : 'nowrap',
                 padding: '12px 12px', borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
               }}>
                 <Avatar initials={p.initials} src={p.photoUrl} />
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: isMobile ? 150 : 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>
                     {p.name}
                     {p.fonction && <span style={{ fontSize: 13, fontWeight: 500, color: C.sub }}> · {p.fonction}</span>}
@@ -526,11 +526,11 @@ function AteliersSection() {
           onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
           placeholder="Nom du nouvel atelier…"
           aria-label="Nom du nouvel atelier"
-          style={{ flex: 1, padding: '12px 14px', fontSize: 16, borderRadius: 10, border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit' }}
+          style={{ flex: 1, minWidth: 0, padding: '12px 14px', fontSize: 16, borderRadius: 10, border: `1px solid ${C.line}`, outline: 'none', fontFamily: 'inherit' }}
         />
         <button
           onClick={handleCreate}
-          style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 18px', fontSize: 16, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 18px', fontSize: 16, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
         >
           Créer
         </button>
@@ -709,8 +709,8 @@ function CvsSection() {
             <i className="ti ti-gavel" style={{ fontSize: 24, color: C.primary }} />
           </div>
           <div style={{ fontSize: 14, color: C.sub, lineHeight: 1.5 }}>
-            Désignez les <strong style={{ color: C.ink }}>délégués</strong> et <strong style={{ color: C.ink }}>suppléants</strong> du CVS.
-            Ils pourront organiser les préréunions de préparation et convoquer le CVS depuis l&apos;agenda.
+            Désignez les <strong style={{ color: C.ink }}>délégués</strong> et <strong style={{ color: C.ink }}>suppléants</strong>{' '}
+            du CVS. Ils pourront organiser les préréunions de préparation et convoquer le CVS depuis l&apos;agenda.
           </div>
         </div>
 
