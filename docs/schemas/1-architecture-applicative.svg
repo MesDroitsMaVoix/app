@@ -1,0 +1,74 @@
+<svg width="680" viewBox="0 0 680 620" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>Architecture applicative de Mes Droits, Ma Voix</title>
+<desc>Trois couches : navigateur (React, Zustand, PWA), serveur Next.js (Server Actions, session, REST helper), et Supabase (base Postgres et stockage de fichiers).</desc>
+<style>
+text{font-family:'Helvetica Neue',Arial,sans-serif}
+.t{font-size:14px;font-weight:500;fill:#2C2C2A}
+.th{font-size:14px;font-weight:500;fill:#2C2C2A}
+.ts{font-size:12px;font-weight:400;fill:#5F5E5A}
+.c-purple{fill:#EEEDFE;stroke:#534AB7}
+.c-teal{fill:#E1F5EE;stroke:#0F6E56}
+.c-coral{fill:#FAECE7;stroke:#993C1D}
+.c-amber{fill:#FAEEDA;stroke:#854F0B}
+.c-blue{fill:#E6F1FB;stroke:#185FA5}
+.c-gray{fill:#F1EFE8;stroke:#5F5E5A}
+</style>
+<defs>
+<marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5F5E5A"/></marker>
+</defs>
+<rect x="0" y="0" width="680" height="620" fill="#ffffff"/>
+
+<text class="th" x="40" y="34">Navigateur — client (Next.js App Router + React 19)</text>
+<rect x="40" y="46" width="600" height="120" rx="10" fill="none" stroke="#888780" stroke-dasharray="4 4"/>
+
+<g class="c-purple"><rect x="58" y="64" width="180" height="40" rx="8"/></g>
+<text class="t" x="148" y="82" text-anchor="middle">Pages &amp; composants UI</text>
+<text class="ts" x="148" y="97" text-anchor="middle">Sidebar, BottomNav, 7 pages</text>
+
+<g class="c-purple"><rect x="250" y="64" width="180" height="40" rx="8"/></g>
+<text class="t" x="340" y="82" text-anchor="middle">Store Zustand</text>
+<text class="ts" x="340" y="97" text-anchor="middle">useAppStore — état global</text>
+
+<g class="c-teal"><rect x="442" y="64" width="180" height="40" rx="8"/></g>
+<text class="t" x="532" y="82" text-anchor="middle">Couche PWA</text>
+<text class="ts" x="532" y="97" text-anchor="middle">service worker + manifest</text>
+
+<g class="c-gray"><rect x="58" y="116" width="564" height="36" rx="8"/></g>
+<text class="t" x="340" y="138" text-anchor="middle">Connexion par code à 4 chiffres · déverrouillage biométrique (Face ID / empreinte)</text>
+
+<line x1="340" y1="166" x2="340" y2="200" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#ar)"/>
+<text class="ts" x="352" y="187" text-anchor="start">appels async (Server Actions)</text>
+
+<text class="th" x="40" y="226">Serveur — Next.js sur Vercel</text>
+<rect x="40" y="238" width="600" height="150" rx="10" fill="none" stroke="#888780" stroke-dasharray="4 4"/>
+
+<g class="c-coral"><rect x="58" y="256" width="270" height="56" rx="8"/></g>
+<text class="t" x="193" y="280" text-anchor="middle">Server Actions — app/actions.ts</text>
+<text class="ts" x="193" y="298" text-anchor="middle">seul pont client ↔ base de données</text>
+
+<g class="c-coral"><rect x="340" y="256" width="282" height="56" rx="8"/></g>
+<text class="t" x="481" y="280" text-anchor="middle">Session signée (cookie HMAC)</text>
+<text class="ts" x="481" y="298" text-anchor="middle">lib/session.ts · vérifie les codes</text>
+
+<g class="c-amber"><rect x="58" y="324" width="564" height="46" rx="8"/></g>
+<text class="t" x="340" y="346" text-anchor="middle">supabaseRest.ts — appels REST via fetch (clé service_role)</text>
+<text class="ts" x="340" y="362" text-anchor="middle">la clé secrète reste uniquement côté serveur</text>
+
+<line x1="340" y1="388" x2="340" y2="422" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#ar)"/>
+<text class="ts" x="352" y="409" text-anchor="start">HTTPS (PostgREST + Storage API)</text>
+
+<text class="th" x="40" y="448">Supabase — backend managé</text>
+<rect x="40" y="460" width="600" height="130" rx="10" fill="none" stroke="#888780" stroke-dasharray="4 4"/>
+
+<g class="c-teal"><rect x="58" y="478" width="280" height="94" rx="8"/></g>
+<text class="t" x="198" y="506" text-anchor="middle">Base Postgres</text>
+<text class="ts" x="198" y="526" text-anchor="middle">8 tables (id, data jsonb)</text>
+<text class="ts" x="198" y="544" text-anchor="middle">accounts, people, events,</text>
+<text class="ts" x="198" y="560" text-anchor="middle">reports, conversations…</text>
+
+<g class="c-blue"><rect x="350" y="478" width="272" height="94" rx="8"/></g>
+<text class="t" x="486" y="506" text-anchor="middle">Storage — bucket attachments</text>
+<text class="ts" x="486" y="526" text-anchor="middle">pièces jointes des comptes-rendus</text>
+<text class="ts" x="486" y="544" text-anchor="middle">PDF, images, Word</text>
+<text class="ts" x="486" y="560" text-anchor="middle">URL publique stockée en base</text>
+</svg>

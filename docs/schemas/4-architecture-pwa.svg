@@ -1,0 +1,70 @@
+<svg width="680" viewBox="0 0 680 530" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>Architecture PWA — Progressive Web App</title>
+<desc>L'app est installable sur l'écran d'accueil via le manifest, et un service worker en stratégie network-first sert la dernière version en ligne et retombe sur le cache hors-ligne.</desc>
+<style>
+text{font-family:'Helvetica Neue',Arial,sans-serif}
+.t{font-size:14px;font-weight:500;fill:#2C2C2A}
+.th{font-size:14px;font-weight:500;fill:#2C2C2A}
+.ts{font-size:12px;font-weight:400;fill:#5F5E5A}
+.c-purple{fill:#EEEDFE;stroke:#534AB7}
+.c-coral{fill:#FAECE7;stroke:#993C1D}
+.c-amber{fill:#FAEEDA;stroke:#854F0B}
+.c-blue{fill:#E6F1FB;stroke:#185FA5}
+.c-green{fill:#EAF3DE;stroke:#3B6D11}
+.c-red{fill:#FCEBEB;stroke:#A32D2D}
+.c-gray{fill:#F1EFE8;stroke:#5F5E5A}
+</style>
+<defs>
+<marker id="a4" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5F5E5A"/></marker>
+<marker id="a4g" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#3B6D11"/></marker>
+<marker id="a4r" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#A32D2D"/></marker>
+</defs>
+<rect x="0" y="0" width="680" height="530" fill="#ffffff"/>
+
+<text class="th" x="40" y="34">Installation</text>
+
+<g class="c-purple"><rect x="40" y="48" width="285" height="78" rx="8"/></g>
+<text class="t" x="182" y="74" text-anchor="middle">manifest.ts</text>
+<text class="ts" x="182" y="96" text-anchor="middle">nom, icônes 192/512, maskable</text>
+<text class="ts" x="182" y="114" text-anchor="middle">display standalone · thème corail</text>
+
+<g class="c-blue"><rect x="355" y="48" width="285" height="78" rx="8"/></g>
+<text class="t" x="497" y="74" text-anchor="middle">Écran d'accueil</text>
+<text class="ts" x="497" y="96" text-anchor="middle">app installée comme native</text>
+<text class="ts" x="497" y="114" text-anchor="middle">plein écran, sans barre navigateur</text>
+
+<line x1="325" y1="87" x2="351" y2="87" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a4)"/>
+
+<line x1="40" y1="150" x2="640" y2="150" stroke="#D3D1C7" stroke-width="1"/>
+
+<text class="th" x="40" y="182">Service worker — stratégie network-first</text>
+
+<g class="c-coral"><rect x="40" y="196" width="200" height="60" rx="8"/></g>
+<text class="t" x="140" y="220" text-anchor="middle">ServiceWorkerRegister</text>
+<text class="ts" x="140" y="238" text-anchor="middle">enregistre /sw.js au démarrage</text>
+
+<g class="c-amber"><rect x="270" y="196" width="200" height="60" rx="8"/></g>
+<text class="t" x="370" y="220" text-anchor="middle">sw.js — intercepte fetch</text>
+<text class="ts" x="370" y="238" text-anchor="middle">requêtes GET uniquement</text>
+
+<line x1="240" y1="226" x2="266" y2="226" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#a4)"/>
+
+<g class="c-green"><rect x="120" y="316" width="220" height="78" rx="8"/></g>
+<text class="t" x="230" y="342" text-anchor="middle">En ligne</text>
+<text class="ts" x="230" y="364" text-anchor="middle">sert la réponse réseau à jour</text>
+<text class="ts" x="230" y="382" text-anchor="middle">et la copie dans le cache</text>
+
+<g class="c-red"><rect x="400" y="316" width="220" height="78" rx="8"/></g>
+<text class="t" x="510" y="342" text-anchor="middle">Hors-ligne</text>
+<text class="ts" x="510" y="364" text-anchor="middle">le fetch échoue →</text>
+<text class="ts" x="510" y="382" text-anchor="middle">retombe sur le cache (mdmv-v1)</text>
+
+<line x1="350" y1="256" x2="250" y2="312" stroke="#3B6D11" stroke-width="1.5" marker-end="url(#a4g)"/>
+<text class="ts" x="262" y="290" text-anchor="end" fill="#3B6D11">succès</text>
+<line x1="390" y1="256" x2="490" y2="312" stroke="#A32D2D" stroke-width="1.5" marker-end="url(#a4r)"/>
+<text class="ts" x="478" y="290" text-anchor="start" fill="#A32D2D">échec réseau</text>
+
+<g class="c-gray"><rect x="40" y="424" width="600" height="74" rx="8"/></g>
+<text class="t" x="340" y="452" text-anchor="middle">Cache Cache Storage (clé mdmv-v1)</text>
+<text class="ts" x="340" y="474" text-anchor="middle">les anciens caches sont purgés à l'activation d'une nouvelle version</text>
+</svg>
