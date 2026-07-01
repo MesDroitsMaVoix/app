@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '@/store/useAppStore'
-import { uploadAttachment } from '@/app/actions'
+import { uploadAttachment, pushAvailable } from '@/app/actions'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 import { biometricAvailable, enrollBiometric, getBiometricEntry, clearBiometric } from '@/lib/biometric'
+import { pushSupported, isSubscribed, enablePush, disablePush, pushPermission } from '@/lib/push'
 
 const ROLE_LABEL = {
   admin: 'Administrateur',
@@ -40,6 +41,13 @@ export default function Parametres() {
   const [bioEnabled, setBioEnabled] = useState(false)
   const [bioBusy, setBioBusy] = useState(false)
 
+  // Push notifications: available only when configured on the server (VAPID keys)
+  // and supported by this browser/device (on iOS: installed PWA, 16.4+).
+  const [pushOk, setPushOk] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushDenied, setPushDenied] = useState(false)
+
   useEffect(() => {
     let alive = true
     biometricAvailable().then((ok) => { if (alive) setBioSupported(ok) })
@@ -47,6 +55,43 @@ export default function Parametres() {
     setBioEnabled(!!entry && entry.accountId === currentAccountId)
     return () => { alive = false }
   }, [currentAccountId])
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      if (!pushSupported()) return
+      const available = await pushAvailable().catch(() => false)
+      if (!alive || !available) return
+      setPushOk(true)
+      setPushDenied(pushPermission() === 'denied')
+      setPushEnabled(await isSubscribed())
+    })()
+    return () => { alive = false }
+  }, [])
+
+  const togglePush = async () => {
+    if (pushBusy) return
+    setPushBusy(true)
+    setMessage(null)
+    try {
+      if (pushEnabled) {
+        await disablePush()
+        setPushEnabled(false)
+        setMessage({ type: 'ok', text: 'Notifications désactivées sur cet appareil.' })
+      } else {
+        const ok = await enablePush()
+        setPushEnabled(ok)
+        setPushDenied(pushPermission() === 'denied')
+        setMessage(ok
+          ? { type: 'ok', text: 'Notifications activées : vous serez prévenu·e sur cet appareil.' }
+          : { type: 'err', text: "L'autorisation a été refusée ou n'est pas disponible sur cet appareil." })
+      }
+    } catch {
+      setMessage({ type: 'err', text: "L'opération a échoué. Réessayez." })
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   const toggleBiometric = async () => {
     if (bioBusy) return
@@ -241,6 +286,50 @@ export default function Parametres() {
           >
             <i className={`ti ${bioBusy ? 'ti-loader-2' : bioEnabled ? 'ti-lock-open' : 'ti-fingerprint'}`} style={{ fontSize: 20 }} />
             {bioBusy ? 'Patientez…' : bioEnabled ? 'Désactiver sur cet appareil' : 'Activer sur cet appareil'}
+          </button>
+        </Card>
+      )}
+
+      {/* Push notifications — alerts on this device */}
+      {persist && pushOk && (
+        <Card style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+              background: C.light, color: C.primary,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <i className="ti ti-bell" style={{ fontSize: 24 }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, color: C.ink, margin: '0 0 4px' }}>
+                Notifications
+              </h3>
+              <p style={{ fontSize: 15, color: C.sub, margin: 0, lineHeight: 1.4 }}>
+                {pushDenied
+                  ? "Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages de votre navigateur/téléphone pour les activer."
+                  : pushEnabled
+                    ? 'Activées sur cet appareil : nouveaux messages, comptes rendus et réunions vous sont signalés.'
+                    : 'Recevez une alerte sur cet appareil pour les nouveaux messages, comptes rendus et réunions.'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={togglePush}
+            disabled={pushBusy || pushDenied}
+            style={{
+              marginTop: 16, width: '100%', borderRadius: 12, padding: 14, fontSize: 16, fontWeight: 600,
+              cursor: pushBusy || pushDenied ? 'not-allowed' : 'pointer',
+              opacity: pushDenied ? 0.6 : 1,
+              border: pushEnabled ? `1px solid ${C.line}` : 'none',
+              background: pushEnabled ? '#fff' : C.primary,
+              color: pushEnabled ? '#DC2626' : '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            <i className={`ti ${pushBusy ? 'ti-loader-2' : pushEnabled ? 'ti-bell-off' : 'ti-bell-ringing'}`} style={{ fontSize: 20 }} />
+            {pushBusy ? 'Patientez…' : pushEnabled ? 'Désactiver sur cet appareil' : 'Activer sur cet appareil'}
           </button>
         </Card>
       )}

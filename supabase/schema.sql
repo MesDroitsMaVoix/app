@@ -20,6 +20,8 @@ create table if not exists events        (id text primary key, data jsonb not nu
 create table if not exists reports       (id text primary key, data jsonb not null);
 create table if not exists conversations (id text primary key, data jsonb not null);
 create table if not exists notifications  (id text primary key, data jsonb not null);
+-- Abonnements aux notifications push (un par appareil/navigateur).
+create table if not exists push_subscriptions (id text primary key, data jsonb not null);
 
 -- Sécurité : on active RLS sans politique publique. Seul le rôle "service_role"
 -- (utilisé uniquement côté serveur, jamais exposé au navigateur) peut lire/écrire ;
@@ -32,6 +34,7 @@ alter table events        enable row level security;
 alter table reports       enable row level security;
 alter table conversations enable row level security;
 alter table notifications enable row level security;
+alter table push_subscriptions enable row level security;
 
 -- =============================================================================
 -- Stockage des pièces jointes (PDF / images / Word)

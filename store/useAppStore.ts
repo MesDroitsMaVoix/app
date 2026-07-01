@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { bootstrap, signIn, signInWithBiometric, signOut, loadData, persistUpsert, persistDelete } from '@/app/actions'
+import { bootstrap, signIn, signInWithBiometric, signOut, loadData, persistUpsert, persistDelete, notifyPush } from '@/app/actions'
 
 export type Role = 'admin' | 'travailleur'
 
@@ -474,6 +474,18 @@ function makeNotification(text: string, recipientIds: string[], page?: PageId): 
   return { id: newId('n'), text, createdAt: Date.now(), recipientIds, readBy: [], page }
 }
 
+/** Fire a mobile push to recipients, mirroring an in-app notification. Only in
+ * configured (persist) mode; fully fire-and-forget so it never blocks the UI or
+ * throws. The server no-ops if VAPID keys aren't set. */
+function firePush(
+  persist: boolean,
+  recipientIds: string[],
+  payload: { title: string; body: string; page?: PageId; convId?: number; tag?: string },
+) {
+  if (!persist || recipientIds.length === 0) return
+  void notifyPush(recipientIds, payload).catch(() => {})
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   role: 'travailleur',
   activePage: 'accueil',
@@ -632,7 +644,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       return {
         people: s.people.filter((p) => p.id !== id),
         accounts: s.accounts.filter((a) => a.personId !== id),
-        groups: s.groups.map((g) => ({ ...g, memberIds: g.memberIds.filter((m) => m !== id) })),
+        // Remove the person from every group — including the CVS council, where
+        // they may be listed as délégué or suppléant. Missing these left an
+        // orphan id referencing a deleted person in the database.
+        groups: s.groups.map((g) => ({
+          ...g,
+          memberIds: g.memberIds.filter((m) => m !== id),
+          delegateIds: (g.delegateIds ?? []).filter((d) => d !== id),
+          suppleantIds: (g.suppleantIds ?? []).filter((sp) => sp !== id),
+        })),
         ateliers,
         events: s.events.map((e) => ({ ...e, personIds: e.personIds.filter((p) => p !== id) })),
         conversations,
@@ -802,6 +822,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const event = { ...e, id: newId('e') }
       const recipients = expandAudience(event, s.people, s.groups, s.ateliers)
       const notif = makeNotification(`Nouvelle réunion : ${event.title}`, recipients, 'agenda')
+      firePush(s.persist, recipients, { title: 'Nouvelle réunion', body: event.title, page: 'agenda' })
       return { events: [...s.events, event], notifications: [notif, ...s.notifications] }
     }),
 
@@ -844,10 +865,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Pending report → notify the admins who must validate it.
         const admins = s.people.filter((p) => p.kind === 'admin').map((p) => p.id)
         notif = makeNotification(`Compte rendu à valider : ${report.title}`, admins, 'comptes')
+        firePush(s.persist, admins, { title: 'Compte rendu à valider', body: report.title, page: 'comptes' })
       } else {
         // Published directly → notify its audience.
         const recipients = expandAudience(report, s.people, s.groups, s.ateliers)
         notif = makeNotification(`Nouveau compte rendu : ${report.title}`, recipients, 'comptes')
+        firePush(s.persist, recipients, { title: 'Nouveau compte rendu', body: report.title, page: 'comptes' })
       }
       return { reports: [report, ...s.reports], notifications: [notif, ...s.notifications] }
     }),
@@ -866,6 +889,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Validation makes the report visible → notify its audience.
       const recipients = expandAudience(report, s.people, s.groups, s.ateliers)
       const notif = makeNotification(`Nouveau compte rendu : ${report.title}`, recipients, 'comptes')
+      firePush(s.persist, recipients, { title: 'Nouveau compte rendu', body: report.title, page: 'comptes' })
       return { reports, notifications: [notif, ...s.notifications] }
     }),
 
@@ -909,6 +933,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             ...notifications,
           ]
         }
+        firePush(s.persist, recipients, {
+          title: conv.atelierId ? conv.name : senderName,
+          body: conv.atelierId ? `${senderName} : ${text}` : text,
+          page: 'messagerie',
+          convId: conv.id,
+          tag: `conv-${conv.id}`,
+        })
       }
       return { conversations, notifications }
     }),

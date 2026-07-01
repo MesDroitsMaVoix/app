@@ -6,12 +6,15 @@
 // verified here and never sent to the browser, and every data action requires
 // a valid session cookie.
 
+import crypto from 'crypto'
+import type { PushSubscription } from 'web-push'
 import {
   supabaseConfigured, restSelectAll, restUpsert, restDelete, storageUpload, Row,
 } from '@/lib/supabaseRest'
 import {
   setSession, clearSession, getSessionAccountId, issueBiometricToken, verifyBiometricToken,
 } from '@/lib/session'
+import { pushConfigured, sendPush, type PushPayload } from '@/lib/webpush'
 
 const TABLES = ['accounts', 'people', 'ateliers', 'groups', 'events', 'reports', 'conversations', 'notifications'] as const
 export type TableName = (typeof TABLES)[number]
@@ -196,6 +199,100 @@ export async function persistDelete(table: string, ids: string[]): Promise<void>
   await requireAuth()
   assertTable(table)
   await restDelete(table, ids)
+}
+
+/* ---------- Web Push subscriptions ---------- */
+
+// Stored in the (optional) push_subscriptions table as { id, data } rows, keyed
+// by a hash of the endpoint so re-subscribing the same device is idempotent.
+const PUSH_TABLE = 'push_subscriptions'
+
+type StoredSub = {
+  id: string
+  personId: string | null
+  accountId: string
+  sub: PushSubscription
+  createdAt: number
+}
+
+/** Stable id for a subscription (hash of its endpoint). */
+function subId(endpoint: string): string {
+  return 'sub-' + crypto.createHash('sha256').update(endpoint).digest('hex').slice(0, 32)
+}
+
+/** The personId linked to the current session's account (may be undefined). */
+async function currentPersonId(accountId: string): Promise<string | null> {
+  const acc = (await fetchAccounts()).find((a) => a.id === accountId)
+  return (acc?.personId as string | undefined) ?? null
+}
+
+async function loadSubs(): Promise<StoredSub[]> {
+  try {
+    return (await restSelectAll(PUSH_TABLE)).map((r) => r.data as StoredSub)
+  } catch {
+    // Table not migrated yet — treat as "no subscriptions".
+    return []
+  }
+}
+
+/** Whether push is available on this deployment (VAPID keys set). Lets the UI
+ * hide the toggle when the server can't actually send. */
+export async function pushAvailable(): Promise<boolean> {
+  return supabaseConfigured() && pushConfigured()
+}
+
+/** Save (or refresh) the push subscription for the current device. */
+export async function subscribeToPush(sub: PushSubscription): Promise<{ ok: boolean }> {
+  if (!supabaseConfigured() || !pushConfigured()) return { ok: false }
+  const accountId = await requireAuth()
+  if (!sub?.endpoint) return { ok: false }
+  const record: StoredSub = {
+    id: subId(sub.endpoint),
+    personId: await currentPersonId(accountId),
+    accountId,
+    sub,
+    createdAt: Date.now(),
+  }
+  try {
+    await restUpsert(PUSH_TABLE, [{ id: record.id, data: record }])
+    return { ok: true }
+  } catch (err) {
+    console.error('[push] subscribe failed — run the push_subscriptions migration.', err)
+    return { ok: false }
+  }
+}
+
+/** Remove the subscription for a device (on disable / unsubscribe). */
+export async function unsubscribeFromPush(endpoint: string): Promise<void> {
+  if (!supabaseConfigured() || !endpoint) return
+  await requireAuth()
+  try {
+    await restDelete(PUSH_TABLE, [subId(endpoint)])
+  } catch (err) {
+    console.warn('[push] unsubscribe failed:', err)
+  }
+}
+
+/** Send a push to every device of the given recipients (person ids). Called by
+ * the store right after it creates an in-app notification. Fire-and-forget:
+ * never throws, and prunes subscriptions the push service reports as expired. */
+export async function notifyPush(
+  recipientIds: string[],
+  payload: PushPayload,
+): Promise<void> {
+  if (!supabaseConfigured() || !pushConfigured() || recipientIds.length === 0) return
+  const accountId = await getSessionAccountId()
+  if (!accountId) return
+  const me = await currentPersonId(accountId)
+  const targets = new Set(recipientIds.filter((id) => id && id !== me))
+  if (targets.size === 0) return
+
+  const subs = (await loadSubs()).filter((s) => s.personId && targets.has(s.personId))
+  if (subs.length === 0) return
+
+  const results = await Promise.all(subs.map((s) => sendPush(s.sub, payload)))
+  const stale = subs.filter((_, i) => results[i].gone).map((s) => s.id)
+  if (stale.length) await restDelete(PUSH_TABLE, stale).catch(() => {})
 }
 
 export type UploadedAttachment = { name: string; type: string; url: string }
