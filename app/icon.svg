@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <title>Mes Droits Ma Voix</title>
+  <rect width="512" height="512" rx="112" fill="#FF6B5E"/>
+  <g transform="translate(248,251.2) scale(3.2)">
+    <!-- Horn -->
+    <path d="M-44,-18 L8,-32 a9,9 0 0 1 11,8 V24 a9,9 0 0 1 -11,8 L-44,18 Z" fill="#ffffff"/>
+    <!-- Grip -->
+    <rect x="-56" y="-18" width="14" height="36" rx="6" fill="#1E293B"/>
+    <!-- Mouthpiece -->
+    <path d="M-31,21 v14 a10,10 0 0 0 16,0 v-8 Z" fill="#ffffff"/>
+    <!-- Sound waves -->
+    <g stroke="#ffffff" stroke-width="5" stroke-linecap="round" fill="none">
+      <path d="M29,-21 q11,4 11,21"/>
+      <path d="M40,-32 q21,8 21,32"/>
+    </g>
+  </g>
+</svg>
