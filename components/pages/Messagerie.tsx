@@ -22,20 +22,23 @@ function isWorkingHours(ts: number): boolean {
 
 /** Title/avatar of a conversation as seen by the viewer (the *other* person for
  * a direct chat, the atelier name for a group). */
-function convDisplay(c: Conversation, viewerId: string, people: Person[]): { name: string; initials: string; isGroup: boolean; photoUrl?: string } {
+function convDisplay(c: Conversation, viewerId: string, people: Person[]): { name: string; initials: string; isGroup: boolean; photoUrl?: string; deleted?: boolean } {
   if (c.atelierId) return { name: c.name, initials: c.initials, isGroup: true }
   const otherId = (c.participantIds ?? []).find((id) => id !== viewerId)
   const other = people.find((p) => p.id === otherId)
-  return { name: other?.name ?? c.name, initials: other?.initials ?? c.initials, isGroup: false, photoUrl: other?.photoUrl }
+  // The other participant no longer exists (staff member deleted).
+  if (!other) return { name: 'Utilisateur supprimé', initials: '?', isGroup: false, deleted: true }
+  return { name: other.name, initials: other.initials, isGroup: false, photoUrl: other.photoUrl }
 }
 
 export default function Messagerie() {
-  const { conversations, activeConversationId, accounts, currentAccountId, people, setConversation, sendMessage, deleteMessage, startConversation, markConversationRead } = useAppStore()
+  const { conversations, activeConversationId, accounts, currentAccountId, people, setConversation, sendMessage, deleteMessage, deleteConversation, startConversation, markConversationRead } = useAppStore()
   const isMobile = useIsMobile()
   // On phones the list and the conversation are two full-screen views (master/detail).
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
   const [draft, setDraft] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [confirmDeleteConv, setConfirmDeleteConv] = useState(false)
   const [search, setSearch] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const endRef = useRef<HTMLDivElement>(null)
@@ -57,7 +60,7 @@ export default function Messagerie() {
   const visibleConversations = conversations.filter((c) => conversationParticipants(c).includes(viewerId))
 
   const active = visibleConversations.find((c) => c.id === activeConversationId) ?? visibleConversations[0]
-  const personName = (id: string) => people.find((p) => p.id === id)?.name ?? 'Inconnu'
+  const personName = (id: string) => people.find((p) => p.id === id)?.name ?? 'Utilisateur supprimé'
   const personInitials = (id: string) => people.find((p) => p.id === id)?.initials ?? '?'
   const personPhoto = (id: string) => people.find((p) => p.id === id)?.photoUrl
 
@@ -105,7 +108,9 @@ export default function Messagerie() {
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {visibleConversations.map((c) => {
-            const isActive = c.id === activeConversationId
+            // On mobile the list is a separate view; highlighting the "open" one
+            // would leave it stuck in orange after tapping back. Only highlight on desktop.
+            const isActive = !isMobile && c.id === activeConversationId
             const last = c.messages[c.messages.length - 1]
             const disp = convDisplay(c, viewerId, people)
             const unread = isConversationUnread(c, viewerId)
@@ -194,6 +199,21 @@ export default function Messagerie() {
                     {disp.isGroup ? `Atelier · ${members.length} membre(s)` : active.role}
                   </div>
                 </div>
+                {/* Delete conversation — direct chats only (atelier chats follow their atelier). */}
+                {!disp.isGroup && (
+                  <button
+                    onClick={() => setConfirmDeleteConv(true)}
+                    aria-label="Supprimer la conversation"
+                    title="Supprimer la conversation"
+                    style={{
+                      marginLeft: 'auto', width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                      border: `1px solid ${C.line}`, background: '#fff', color: '#dc2626',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    }}
+                  >
+                    <i className="ti ti-trash" style={{ fontSize: 20 }} />
+                  </button>
+                )}
               </div>
 
               {/* Group members — so you know who receives the messages */}
@@ -394,6 +414,60 @@ export default function Messagerie() {
                   </button>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete-conversation confirmation */}
+      {confirmDeleteConv && active && (
+        <div
+          onClick={() => setConfirmDeleteConv(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="alertdialog"
+            aria-label="Confirmer la suppression"
+            style={{
+              background: '#fff', borderRadius: 18, padding: 28, maxWidth: 420, width: '100%',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.2)', textAlign: 'center',
+            }}
+          >
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%', background: '#fee2e2', margin: '0 auto 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: 34, color: '#dc2626' }} />
+            </div>
+            <h3 style={{ fontSize: 21, fontWeight: 600, color: C.ink, margin: '0 0 8px' }}>
+              Supprimer cette conversation ?
+            </h3>
+            <p style={{ fontSize: 16, color: C.sub, margin: '0 0 24px', lineHeight: 1.5 }}>
+              Tous les messages de cet échange seront définitivement supprimés pour tout le monde.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setConfirmDeleteConv(false)}
+                style={{
+                  flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.line}`,
+                  background: '#fff', color: C.ink, fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => { deleteConversation(active.id); setConfirmDeleteConv(false); setMobileView('list') }}
+                style={{
+                  flex: 1, padding: 14, borderRadius: 12, border: 'none',
+                  background: '#dc2626', color: '#fff', fontSize: 16, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Supprimer
+              </button>
             </div>
           </div>
         </div>

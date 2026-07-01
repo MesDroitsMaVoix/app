@@ -115,7 +115,7 @@ export default function Agenda() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `2px solid ${C.line}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', borderBottom: `2px solid ${C.line}` }}>
           {WEEKDAYS.map((w) => (
             <div key={w} style={{ textAlign: 'center', padding: '0 0 10px', fontSize: 14, fontWeight: 700, color: C.sub, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {w}
@@ -123,7 +123,7 @@ export default function Agenda() {
           ))}
         </div>
 
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: isMobile ? 'minmax(56px, auto)' : '1fr' }}>
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridAutoRows: isMobile ? 'minmax(56px, auto)' : '1fr' }}>
           {cells.map((day, i) => {
             if (day === null) {
               return <div key={i} style={{ borderRight: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`, background: '#fcfcfb' }} />
@@ -139,8 +139,8 @@ export default function Agenda() {
                 style={{
                   position: 'relative', textAlign: 'left', cursor: 'pointer', border: 'none',
                   borderRight: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`,
-                  background: isSelected ? C.light : '#fff', padding: 8, minHeight: isMobile ? 56 : 78,
-                  display: 'flex', flexDirection: 'column', gap: 4,
+                  background: isSelected ? C.light : '#fff', padding: isMobile ? 5 : 8, minWidth: 0, minHeight: isMobile ? 56 : 78,
+                  display: 'flex', flexDirection: 'column', gap: 4, overflow: 'hidden',
                   outline: isSelected ? `2px solid ${C.primary}` : 'none', outlineOffset: -2,
                 }}
               >
@@ -152,16 +152,29 @@ export default function Agenda() {
                 }}>
                   {day}
                 </span>
-                {evts.slice(0, 2).map((e, j) => (
-                  <span key={j} style={{
-                    fontSize: 11, fontWeight: 600, color: '#fff', background: TYPE_COLORS[e.type],
-                    borderRadius: 5, padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {e.time} {e.type}
-                  </span>
-                ))}
-                {evts.length > 2 && (
-                  <span style={{ fontSize: 11, color: C.sub, fontWeight: 600 }}>+{evts.length - 2} autre(s)</span>
+                {isMobile ? (
+                  // Narrow cells: colored dots (the day's details show in the side panel).
+                  evts.length > 0 && (
+                    <span style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 'auto' }}>
+                      {evts.slice(0, 4).map((e, j) => (
+                        <span key={j} style={{ width: 7, height: 7, borderRadius: '50%', background: TYPE_COLORS[e.type] }} />
+                      ))}
+                    </span>
+                  )
+                ) : (
+                  <>
+                    {evts.slice(0, 2).map((e, j) => (
+                      <span key={j} style={{
+                        maxWidth: '100%', fontSize: 11, fontWeight: 600, color: '#fff', background: TYPE_COLORS[e.type],
+                        borderRadius: 5, padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {e.time} {e.type}
+                      </span>
+                    ))}
+                    {evts.length > 2 && (
+                      <span style={{ fontSize: 11, color: C.sub, fontWeight: 600 }}>+{evts.length - 2} autre(s)</span>
+                    )}
+                  </>
                 )}
               </button>
             )

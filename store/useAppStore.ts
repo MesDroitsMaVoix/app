@@ -361,6 +361,9 @@ interface AppState {
   setConversation: (id: number) => void
   sendMessage: (text: string, senderId: string) => void
   deleteMessage: (conversationId: number, messageId: number) => void
+  /** Delete a whole conversation (direct chats only; atelier group chats are
+   * removed together with their atelier). */
+  deleteConversation: (conversationId: number) => void
   startConversation: (person: { id: string; name: string; initials: string; role: string }, viewerId: string) => void
   /** Mark a conversation as read for a person (clears its unread state). */
   markConversationRead: (conversationId: number, personId: string) => void
@@ -951,6 +954,14 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? { ...c, messages: c.messages.filter((m) => m.id !== messageId) }
           : c
       ),
+    })),
+
+  deleteConversation: (conversationId) =>
+    set((s) => ({
+      conversations: s.conversations.filter((c) => c.id !== conversationId),
+      // Drop the selection if it was the deleted one, and clear its notifications.
+      activeConversationId: s.activeConversationId === conversationId ? 0 : s.activeConversationId,
+      notifications: s.notifications.filter((n) => n.convId !== conversationId),
     })),
 
   markConversationRead: (conversationId, personId) =>
