@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import {
-  useAppStore, DELETE_WINDOW_MS, conversationParticipants, isConversationUnread,
+  useAppStore, DELETE_WINDOW_MS, conversationParticipants, isConversationUnread, appSettings,
   Conversation, Person,
 } from '@/store/useAppStore'
 import { C, Avatar } from '@/components/ui'
@@ -32,7 +32,7 @@ function convDisplay(c: Conversation, viewerId: string, people: Person[]): { nam
 }
 
 export default function Messagerie() {
-  const { conversations, activeConversationId, accounts, currentAccountId, people, setConversation, sendMessage, deleteMessage, deleteConversation, startConversation, markConversationRead } = useAppStore()
+  const { conversations, activeConversationId, accounts, currentAccountId, people, settings, setConversation, sendMessage, deleteMessage, deleteConversation, startConversation, markConversationRead } = useAppStore()
   const isMobile = useIsMobile()
   // On phones the list and the conversation are two full-screen views (master/detail).
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
@@ -73,7 +73,9 @@ export default function Messagerie() {
     if (active && viewerId) markConversationRead(active.id, viewerId)
   }, [active?.id, active?.messages.length, viewerId, markConversationRead])
 
-  const canSend = isWorkingHours(now)
+  // Admins can lift the "working hours only" rule; when off, sending is always allowed.
+  const restricted = appSettings(settings).messagingRestricted
+  const canSend = !restricted || isWorkingHours(now)
 
   const handleSend = () => {
     if (!canSend || !active || !viewerId) return

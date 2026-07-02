@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useAppStore } from '@/store/useAppStore'
+import { useAppStore, appSettings } from '@/store/useAppStore'
 import { uploadAttachment, pushAvailable } from '@/app/actions'
 import { C, PageIntro, Card, Avatar } from '@/components/ui'
 import { biometricAvailable, enrollBiometric, getBiometricEntry, clearBiometric } from '@/lib/biometric'
@@ -24,7 +24,7 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 export default function Parametres() {
-  const { accounts, currentAccountId, people, changeCode, updatePerson, persist } = useAppStore()
+  const { accounts, currentAccountId, people, settings, changeCode, updatePerson, setMessagingRestricted, persist } = useAppStore()
   const me = accounts.find((a) => a.id === currentAccountId)
   const myPerson = people.find((p) => p.id === me?.personId)
 
@@ -203,6 +203,49 @@ export default function Parametres() {
           </div>
         )}
       </Card>
+
+      {/* Admin: messaging working-hours rule (org-wide) */}
+      {me.role === 'admin' && (() => {
+        const restricted = appSettings(settings).messagingRestricted
+        return (
+          <Card style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                background: C.light, color: C.primary,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <i className="ti ti-clock-pause" style={{ fontSize: 24 }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 600, color: C.ink, margin: '0 0 4px' }}>
+                  Messagerie hors temps de travail
+                </h3>
+                <p style={{ fontSize: 15, color: C.sub, margin: 0, lineHeight: 1.4 }}>
+                  {restricted
+                    ? "L'envoi de messages est coupé en dehors des heures de travail (8h30 à 16h30). La lecture reste possible à tout moment."
+                    : "La messagerie est ouverte à toute heure, y compris en dehors des heures de travail."}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setMessagingRestricted(!restricted)}
+              style={{
+                marginTop: 16, width: '100%', borderRadius: 12, padding: 14, fontSize: 16, fontWeight: 600,
+                cursor: 'pointer',
+                border: restricted ? `1px solid ${C.line}` : 'none',
+                background: restricted ? '#fff' : C.primary,
+                color: restricted ? C.primary : '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              <i className={`ti ${restricted ? 'ti-clock-play' : 'ti-clock-pause'}`} style={{ fontSize: 20 }} />
+              {restricted ? 'Ouvrir la messagerie à toute heure' : 'Couper la messagerie hors temps de travail'}
+            </button>
+          </Card>
+        )
+      })()}
 
       {/* Change code */}
       <Card>

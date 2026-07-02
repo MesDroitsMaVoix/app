@@ -16,12 +16,12 @@ import {
 } from '@/lib/session'
 import { pushConfigured, sendPush, type PushPayload } from '@/lib/webpush'
 
-const TABLES = ['accounts', 'people', 'ateliers', 'groups', 'events', 'reports', 'conversations', 'notifications'] as const
+const TABLES = ['accounts', 'people', 'ateliers', 'groups', 'events', 'reports', 'conversations', 'notifications', 'settings'] as const
 export type TableName = (typeof TABLES)[number]
 
-// The notifications table was added after the initial schema. If a project
-// hasn't run that migration yet, treat it as empty instead of failing.
-const OPTIONAL_TABLES = new Set<string>(['notifications'])
+// The notifications and settings tables were added after the initial schema. If
+// a project hasn't run that migration yet, treat them as empty instead of failing.
+const OPTIONAL_TABLES = new Set<string>(['notifications', 'settings'])
 
 function assertTable(table: string): asserts table is TableName {
   if (!(TABLES as readonly string[]).includes(table)) {

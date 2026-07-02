@@ -20,6 +20,8 @@ create table if not exists events        (id text primary key, data jsonb not nu
 create table if not exists reports       (id text primary key, data jsonb not null);
 create table if not exists conversations (id text primary key, data jsonb not null);
 create table if not exists notifications  (id text primary key, data jsonb not null);
+-- Réglages généraux de l'application (une seule ligne "app"), gérés par les admins.
+create table if not exists settings       (id text primary key, data jsonb not null);
 -- Abonnements aux notifications push (un par appareil/navigateur).
 create table if not exists push_subscriptions (id text primary key, data jsonb not null);
 
@@ -34,6 +36,7 @@ alter table events        enable row level security;
 alter table reports       enable row level security;
 alter table conversations enable row level security;
 alter table notifications enable row level security;
+alter table settings      enable row level security;
 alter table push_subscriptions enable row level security;
 
 -- =============================================================================

@@ -251,6 +251,24 @@ export interface AppNotification {
   convId?: number
 }
 
+/* ---------- App settings (org-wide, set by admins) ---------- */
+
+export interface AppSettings {
+  id: string
+  /** When true, messages can only be sent during working hours (8h30–16h30);
+   * reading stays possible at any time. Admins can turn this off. */
+  messagingRestricted: boolean
+}
+
+export const SETTINGS_ID = 'app'
+
+const DEFAULT_SETTINGS: AppSettings = { id: SETTINGS_ID, messagingRestricted: true }
+
+/** Current app settings, falling back to defaults when nothing is stored yet. */
+export function appSettings(settings: AppSettings[]): AppSettings {
+  return settings.find((s) => s.id === SETTINGS_ID) ?? DEFAULT_SETTINGS
+}
+
 export interface Account {
   id: string
   name: string
@@ -298,6 +316,9 @@ interface AppState {
   activeConversationId: number
 
   notifications: AppNotification[]
+
+  /** Org-wide settings (single 'app' row), managed by admins. */
+  settings: AppSettings[]
 
   /** Load data from Supabase (or stay in demo mode if not configured). */
   hydrate: () => Promise<void>
@@ -367,6 +388,9 @@ interface AppState {
   startConversation: (person: { id: string; name: string; initials: string; role: string }, viewerId: string) => void
   /** Mark a conversation as read for a person (clears its unread state). */
   markConversationRead: (conversationId: number, personId: string) => void
+
+  /** Admin: turn the "messaging only during working hours" rule on or off. */
+  setMessagingRestricted: (restricted: boolean) => void
 }
 
 // Données de départ minimales : un compte administrateur et un compte
@@ -411,7 +435,7 @@ const ACCOUNTS: Account[] = [
 ]
 
 /** Collections that are mirrored to the database, by store key = table name. */
-const SYNC_TABLES = ['accounts', 'people', 'ateliers', 'groups', 'events', 'reports', 'conversations', 'notifications'] as const
+const SYNC_TABLES = ['accounts', 'people', 'ateliers', 'groups', 'events', 'reports', 'conversations', 'notifications', 'settings'] as const
 
 /** Apply a freshly-loaded set of collections from the database to the store. */
 function applyData(set: (partial: Partial<AppState>) => void, d: Record<string, unknown[]>) {
@@ -423,6 +447,7 @@ function applyData(set: (partial: Partial<AppState>) => void, d: Record<string, 
     reports: d.reports as Report[],
     conversations: d.conversations as Conversation[],
     notifications: (d.notifications ?? []) as AppNotification[],
+    settings: ((d.settings as AppSettings[])?.length ? (d.settings as AppSettings[]) : [DEFAULT_SETTINGS]),
     loading: false,
   })
 }
@@ -510,6 +535,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeConversationId: 0,
 
   notifications: [],
+
+  settings: [DEFAULT_SETTINGS],
 
   hydrate: async () => {
     try {
@@ -978,6 +1005,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           : n
       ),
     })),
+
+  setMessagingRestricted: (restricted) =>
+    set((s) => {
+      const others = s.settings.filter((x) => x.id !== SETTINGS_ID)
+      return { settings: [...others, { ...appSettings(s.settings), messagingRestricted: restricted }] }
+    }),
 
   startConversation: (person, viewerId) =>
     set((s) => {
