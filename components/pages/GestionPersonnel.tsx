@@ -15,7 +15,7 @@ const KIND_COLOR: Record<PersonKind, string> = {
 }
 
 export default function GestionPersonnel() {
-  const { people, groups, ateliers, accounts, createGroup, deleteGroup, toggleGroupMember, toggleGroupAtelier, addPerson, deletePerson, regenerateCode, setPage } = useAppStore()
+  const { people, groups, ateliers, accounts, createGroup, deleteGroup, toggleGroupMember, toggleGroupAtelier, addPerson, deletePerson, regenerateCode } = useAppStore()
   const isMobile = useIsMobile()
   const accountForPerson = (personId: string) => accounts.find((a) => a.personId === personId)
   const atelierById = (id: string) => ateliers.find((a) => a.id === id)
@@ -363,19 +363,6 @@ export default function GestionPersonnel() {
               </div>
             ))}
           </Card>
-
-          <button
-            onClick={() => setPage('agenda')}
-            style={{
-              marginTop: 16, width: '100%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              background: C.primary, color: '#fff', border: 'none', borderRadius: 12,
-              padding: 16, fontSize: 16, fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            <i className="ti ti-calendar-plus" style={{ fontSize: 22 }} />
-            Assigner aux réunions (Agenda)
-          </button>
         </div>
       </div>
 
